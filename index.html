@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Nailong</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;height:100%;background:#1d1640;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;font-family:Fredoka,"Trebuchet MS",system-ui,sans-serif}
+  canvas{display:block;width:100vw;height:100vh}
+  #ui{position:fixed;top:10px;right:10px;display:flex;gap:8px;z-index:2}
+  #ui button{font:inherit;font-size:15px;font-weight:700;padding:6px 12px;border-radius:12px;border:3px solid #4A2F0C;background:#FFD21F;color:#4A2F0C;cursor:pointer}
+  #ui button:active{transform:translateY(2px) scale(.96)}
+  #hint{position:fixed;bottom:12px;left:0;right:0;text-align:center;color:#fff;font-size:14px;opacity:.8;pointer-events:none;text-shadow:0 0 3px #000,0 1px 4px #000,0 0 8px #000}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="crayon"><feTurbulence id="turb" type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="1"/><feDisplacementMap in="SourceGraphic" scale="6"/></filter>
+</svg>
+<canvas id="c"></canvas>
+<div id="ui"><button id="muteBtn">Sound: on</button><button id="styleBtn" hidden>Style: sticker</button><button id="skipBtn" hidden>Skip ▶</button></div>
+<div id="hint"></div>
+<script src="core.js"></script>
+<script src="sfx.js"></script>
+<script src="story-intro.js"></script>
+<script src="story.js"></script>
+<script src="story-school2.js"></script>
+<script src="story-canberra.js"></script>
+<script src="games/octagon.js"></script>
+<script src="games/tetris.js"></script>
+<script src="games/blockblast.js"></script>
+<script src="games/bottlesort.js"></script>
+<script src="games/runner.js"></script>
+<script src="games/battle.js"></script>
+<script src="games/pingpong.js"></script>
+<script src="menu.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
