@@ -753,11 +753,11 @@ function stCafeBg(o = {}){
 }
 function stShadow(x, y, w){ ell(x, y, Math.max(10, w), Math.max(10, w)*0.16); ctx.fillStyle = 'rgba(74,47,12,.25)'; ctx.fill(); }
 
-// ---------- scene 3: Nailong drops out of the tunnel into the cafe, can't reach the red bean, Scarlett can (13.0 s) ----------
+// ---------- scene 3: Nailong hops into the cafe from the Chinese room corridor, can't reach the red bean, Scarlett can (13.0 s) ----------
 // Authored at 9.4 s; CAFE1_WARP slows the strain, the failed jumps and the hand-over so each line can be read twice (lines are timed on T).
 const CAFE1_DUR = 13.0, ST_CAFE1_T = CAFE1_DUR;
 const CAFE1_WARP = [[0, 0], [3.4, 3.4], [4.6, 4.0], [5.6, 5.0], [6.6, 5.6], [7.4, 6.4], [9.0, 7.5]];
-const C1_SFX = [[0.2, 'whoosh', {p: 0.7}], [1.2, 'thud'], ...[2.0, 2.25, 2.5, 2.75].map(x => [x, 'tick', {p: 0.6, g: 0.35}]),
+const C1_SFX = [[0.35, 'boing', {p: 1.3, g: 0.35}], [0.75, 'boing', {p: 1.4, g: 0.35}], [1.2, 'thud', {g: 0.6}], ...[2.0, 2.25, 2.5, 2.75].map(x => [x, 'tick', {p: 0.6, g: 0.35}]),
   [4.0, 'boing', {p: 1.2, g: 0.6}], [4.5, 'thud', {p: 1.5, g: 0.5}], [4.52, 'boing', {p: 1.35, g: 0.6}], [5.0, 'thud', {p: 1.5, g: 0.5}],
   ...[4.75, 5.05, 5.35, 5.65].map(x => [x, 'tick', {p: 0.5, g: 0.3}]), [6.2, 'pop', {p: 1.2, g: 0.6}], [7.0, 'clink']];
 function sceneCafe1(T){
@@ -770,10 +770,9 @@ function sceneCafe1(T){
   let nx = nx0, ny = gy;
   const o = {arms: 'down', mouth: 'open', look: [0, 0]};
   let sx = 1, sy = 1, rot = 0;
-  // arrival from the octagon portal in the ceiling
-  const portal = stSeg(t, 0.15, 0.95), pr = lerp(Math.hypot(W, H)*1.1, 0, ease(portal)), pcx = nx0, pcy = -10;
-  if (t < 1.2) { const k = stSeg(t, 0.5, 1.2); ny = lerp(-80, gy, k*k); o.arms = 'up'; o.flail = t*18; o.look = [0, -1]; rot = Math.sin(t*9)*0.2*(1 - k); }
-  else if (t < 1.65) { const q = Math.sin(Math.PI*stSeg(t, 1.2, 1.65)); sx = 1 + 0.35*q; sy = 1 - 0.35*q; o.look = [-0.8, -0.2]; }
+  // arrival: he hops in from the left, still happy from the Chinese room (sceneChineseOut ends with him hopping off right)
+  if (t < 1.2) { const k = ease(stSeg(t, 0.05, 1.2)); nx = lerp(-140, nx0, k); ny = gy - Math.abs(Math.sin(t*Math.PI*2.5))*34*(1 - k*0.6); o.walk = t*14; o.mouth = 'smile'; o.look = [1, -0.2]; }
+  else if (t < 1.65) { const q = Math.sin(Math.PI*stSeg(t, 1.2, 1.65)); sx = 1 + 0.12*q; sy = 1 - 0.12*q; o.look = [0.8, -0.2]; o.mouth = 'smile'; }
   else if (t < 3.0) { const u = ease(stSeg(t, 1.95, 3.0)); nx = lerp(nx0, nxStand, u); o.walk = t*13; o.look = u > 0 ? [1, -0.4] : [0.8, 0]; o.mouth = 'smile'; ny = gy - (u > 0 && u < 1 ? Math.abs(Math.sin(t*13))*5 : 0); }
   else { nx = nxStand; }
   // reaching, jumping, failing
@@ -802,7 +801,7 @@ function sceneCafe1(T){
     if (t < 7.0) { armL = aim.a; lenL = aim.len; }
     else { armL = lerp(aim.a, 0.06, back); lenL = lerp(aim.len, 1, back); }
   }
-  // ---- draw order: portal, Scarlett, Nailong ----
+  // ---- draw order: Scarlett, Nailong ----
   stShadow(nx, gy + 2, 80*NS); if (sxS < W + 200) stShadow(sxS, gy + 2, 70);
   if (sxS < W + 200) {
     let mouth = 'smile';
@@ -813,13 +812,12 @@ function sceneCafe1(T){
   fxMark('sweat', nx + 50*NS, ny - 186*NS*sy, stSeg(t, 5.05, 5.7));    // sweat drop after the third failed jump
   stDust(nx, gy, stSeg(t, 1.2, 2.0), 22);
   if (bPos) { const hh = 62, rot2 = t >= 6.35 ? 0 : 0; if (t < 7.0 || t >= 7.0) stRedBean(bPos[0], bPos[1] + (t < 7.0 ? 30 : 0)*0 + hh*0.5, hh, rot2); }
-  // portal drawn last so it caps the top
-  if (t < 1.1 && pr > 3) {
+  if (false) {   // (the old octagon-portal arrival, kept out of the ride since the Chinese room now comes first)
+    const pr = 0, pcx = 0, pcy = 0, portal = 0;
     const poly = () => { ctx.beginPath(); for (let i = 0; i <= 8; i++) { const a = i/8*Math.PI*2 + Math.PI/8 + t*3; const px = pcx + Math.cos(a)*pr, py = pcy + Math.sin(a)*pr; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath(); };
     ctx.save(); poly(); ctx.clip(); stOctaWorld(t + 5, 305, false); ctx.restore();
     ctx.save(); poly(); ctx.lineWidth = 10; ctx.strokeStyle = `hsl(${290 - portal*200},65%,60%)`; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
   }
-  if (t < 1.1 && t > 0.5 && pr > 3) nailong(nx, ny, NS, {...o, sx, sy, rot});
   // lines
   const topN = ny - 190*NS*sy;
   if (T > 3.6 && T < 5.0) bubble(LINES_STORY.reachGrunt, nx, topN, 30);
