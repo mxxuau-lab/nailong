@@ -8,9 +8,12 @@
 // (hi, that's Nailong, the scream, "Nailong, sending you to BCC" and the toss) and the question comes after it.
 // Authored in SCENE seconds (main.js plays clips at 70%: 1 wall second = 0.7 scene seconds). Interactive at the question:
 // main.js routes keys and clicks here (INTRO.key / INTRO.pointer) and calls INTRO.start(onYes) when the step begins.
-// The send-off (after the scream, before the question): Max says "Nailong, sending you to BCC" (Max, 12 Oct 21:20): the words in his bubble, then giant letters, B first, C 1.5 s
-// later, C again 0.2 s after that, each slamming in with a thud and a screen shake. His arms stretch weirdly long across the sky,
-// grab the falling Nailong, reel him in over his head and toss him head first off screen (whoosh, scream). Then the question.
+// The send-off (after the scream, before the question): Max says "Nailong, sending you to BCC" (Max, 12 Oct 21:20), all of it in his bubble
+// (Max, 13 Oct 14:15: "BCC isn't in big letters at the start", so the giant slamming letters are gone).
+// Max, 13 Oct 10:50: "in the intro I'll fall at the same time as Nailong. ... I'll lift nai long over my heaed and toss him down, he falls
+// through the roof into the chinese classroom." So the two of them fall side by side the whole time (no ground), Max swoops under
+// Nailong, catches him over his head with his normal arms, heaves him up, leans back and throws him down head first off the
+// bottom of the screen. Then the question, Max still falling.
 // Yes: a hop and a fade to navy, then onYes() (the lives card). The Chinese room clip (sceneChineseA) opens with him crash-landing head first. Maybe / No: "Come back when you've got time...", fade to black, a 10 minute lock
 // kept in localStorage (a refresh still shows it), a sleeping Nailong and a countdown; at 0 she can go back to the question.
 // Test hooks: ?clip=sceneIntro, &answer=yes|maybe|no answers by itself at the question, ?unlock=1 clears the lock.
@@ -29,19 +32,19 @@ const LINES_INTRO = {
   z: 'z',
   ready: "Nailong's awake. Got 15 min now?",        // placeholder, Max to edit
   again: 'Start again',                            // placeholder, Max to edit
-  // Max, 12 Oct 21:20: '...ending the intro with, "Nailong, sending you to BCC"'. His bubble says the first part,
-  // the giant letters say the rest, so together they read his line exactly.
-  sendTo: 'Nailong, sending you to',               // Max's line (first part)
-  bcc: ['B', 'C', 'C'],                            // Max's line (the rest): B, then C 1.5 s later, then C 0.2 s after that
+  // Max, 12 Oct 21:20: '...ending the intro with, "Nailong, sending you to BCC"'.
+  sendTo: 'Nailong, sending you to BCC',           // Max's line, all of it in his bubble (Max, 13 Oct 14:15: no giant letters)
   trail: 'AAAAAA',                                 // placeholder, Max to edit (his scream trailing behind him as he flies off)
 };
 
 // beats, in scene seconds
 const INTRO_HI = 0.7, INTRO_LOGO = 1.1, INTRO_FALL = 3.0, INTRO_POINT = 4.4, INTRO_LOUD = 6.8, INTRO_Q_T = 9.0;
 const INTRO_DUR = INTRO_Q_T;   // the clip's length up to the send-off (then the toss, then it waits for her answer)
-// the send-off (scene seconds from its start; 0.7 scene s = 1 real second): his line, the three letters, the long arms, the toss, then ask
-const SEND = {say: 0.5, b: 1.4, c1: 1.4 + 1.05, c2: 1.4 + 1.05 + 0.14,     // C lands 1.5 s (real) after B, the second C 0.2 s after that
-  out: 3.75, reach: 3.85, grab: 4.55, pull: 4.8, wind: 5.35, toss: 5.85, star: 6.32, ask: 7.0, end: 7.4};
+// the send-off (scene seconds from its start; 0.7 scene s = 1 real second): his line, the swoop and catch overhead, the heave, the throw down, then ask
+// (his bubble reads for about 3.2 s of real time, then he swoops, catches, heaves, winds up and throws)
+const SEND = {say: 0.5, out: 2.7, reach: 2.8, grab: 3.5, pull: 3.75, wind: 4.3, toss: 4.8, ask: 5.95, end: 6.35};
+const NL_S = 0.62;          // Nailong's size all through the intro (beside Max, held over his head, thrown)
+const NL_GRIP = [66, -40];  // where Max's hands hold him, in Nailong's own units: his sides, low on his tummy
 const INTRO_SEND_DUR = SEND.ask;   // the send-off's length in scene seconds (about 10 s real) before the question
 const INTRO_LOCK_MIN = 10;     // Maybe or No locks the game this many minutes
 const INTRO_KEY = 'nailong.lock.until';
@@ -108,9 +111,9 @@ const INTRO = {
     }
   },
 
-  // ---- the clip: sky, Max on the left, Nailong falling far behind him ----
+  // ---- the clip: Max and Nailong falling side by side through the sky, the clouds rushing up past them ----
   scene(T, t){
-    const gy = H*0.86, mx = W*0.2, ms = 1.12;
+    const ms = 1.12, k = ms*CAST.max.h, mx0 = W*0.2, my0 = H*0.86;
     // sounds on every beat: each fires once as the clock passes it
     const pv = this.prevT == null ? -1 : this.prevT; this.prevT = T;
     const cue = (at, n, o) => { if (pv < at && T >= at && window.SFX) SFX.play(n, o); };
@@ -125,67 +128,89 @@ const INTRO = {
       const pa = this.prevA == null ? -1 : this.prevA; this.prevA = sa;
       const c2 = (at, n, o) => { if (pa < at && sa >= at && window.SFX) SFX.play(n, o); };
       c2(SEND.say, 'pop', {p: 1.05});
-      c2(SEND.b, 'thud', {p: 0.8, g: 1.5}); c2(SEND.c1, 'thud', {p: 0.9, g: 1.5}); c2(SEND.c2, 'thud', {p: 0.7, g: 1.8});
-      c2(SEND.b + 0.02, 'bigkick', {p: 0.7, g: 0.5}); c2(SEND.c2 + 0.02, 'bigkick', {p: 0.6, g: 0.7});
-      c2(SEND.out, 'swish', {p: 0.8});
-      c2(SEND.reach, 'zip', {p: 0.55, g: 1.2}); c2(SEND.reach + 0.45, 'boing', {p: 0.7});
-      c2(SEND.grab, 'squeak', {p: 1.1}); c2(SEND.grab + 0.08, 'scream', {p: 1.25, g: 0.6});
-      c2(SEND.pull, 'zip', {p: 1.3}); c2(SEND.pull + 0.45, 'boing', {p: 1.1, g: 0.7});
+      c2(SEND.reach, 'zip', {p: 0.55, g: 1.2});                                       // he swoops over under Nailong
+      c2(SEND.grab, 'squeak', {p: 1.1}); c2(SEND.grab + 0.08, 'scream', {p: 1.25, g: 0.6});   // caught overhead
+      c2(SEND.pull, 'zip', {p: 1.3});                                                  // heaved up high
       c2(SEND.wind, 'squeak', {p: 0.8}); c2(SEND.toss - 0.05, 'whoosh', {p: 0.9, g: 1.3}); c2(SEND.toss + 0.02, 'scream', {p: 1.05, g: 1.1});
-      c2(SEND.toss + 0.2, 'boing', {p: 0.6}); c2(SEND.star, 'ding', {p: 1.8, g: 0.8});
     }
     const fallOn = T >= INTRO_FALL, ft = Math.max(0, T - INTRO_FALL);
-    // where Nailong is: drops in from above the top, then keeps falling "in place" (the sky rushes up past him)
-    const nx = W*0.69 + Math.sin(T*1.3)*14, ny = lerp(-40, H*0.31, ease(clamp(ft/1.3, 0, 1)));
     const loud = clamp((T - INTRO_LOUD)/1.2, 0, 1), qk = clamp(ak/0.4, 0, 1);
     ctx.save();
     if (loud > 0 && T < INTRO_Q_T) ctx.translate(...fxShake(0.3 + 0.7*loud*(0.6 + 0.4*Math.sin(T*9)), 9));
-    if (sa >= 0) {   // each letter slams the screen
-      let k = 0, amp = 0;
-      [[SEND.b, 16], [SEND.c1, 20], [SEND.c2, 28]].forEach(([at, am]) => { const u = sa - at; if (u >= 0 && u < 0.4) { const kk = 1 - u/0.4; if (kk*am > k*amp) { k = kk; amp = am; } } });
-      if (k > 0) ctx.translate(...fxShake(k, amp));
-    }
     sky(); sun();
-    // the far sky streams up while he is falling, and eases to a stop once he has been thrown away
-    const fr = sa > SEND.toss ? Math.max(0, T - sa + SEND.toss - INTRO_FALL) + 0.35*(1 - Math.exp(-(sa - SEND.toss)*2.5)) : ft;
-    const rush = fr*fr*40 + fr*520;
+    // the sky streams up past them the whole time (faster once Nailong starts screaming, calmer after the throw)
+    const rush = this.rushAt(T, sa);
     for (let i = 0; i < 9; i++) {
       const c = CLOUDS[i], span = H + 260, y = (((i/9)*span + c.x*120 - rush) % span + span) % span - 130;
       cloud(c.x*W, y, c.s*0.8);
     }
-    if (fallOn && !(sa > SEND.toss)) {   // speed lines streaming up past him (gone once he is thrown)
-      ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 4; ctx.lineCap = 'round';
-      for (let i = 0; i < 6; i++) { const lx = nx - 60 + i*24, ly = ny - 30 - ((T*700 + i*137) % 200); ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx, ly - 46); ctx.stroke(); }
-      ctx.lineCap = 'butt';
+    // ---- where everyone is ----
+    const R = this.rig(T, sa, mx0, my0, k);
+    const {mx, my, lean, toWorld} = R;
+    const nfx = mx0 + 200 + Math.sin(T*1.3)*12, nfy = my0 - 215 + Math.sin(T*2.3 + 1)*9 - 26*Math.max(0, Math.sin(clamp(ft/0.35, 0, 1)*Math.PI));   // Nailong beside him (a jolt as the gust hits)
+    let N = {x: nfx, y: nfy, s: NL_S, rot: Math.sin(T*2)*0.12, arms: 'up', flail: T*5, look: [-0.8, 0.2], mouth: 'o'};   // falling quietly, wide-eyed
+    if (fallOn) { N.rot = Math.sin(T*6)*0.45; N.flail = T*18; N.look = [0, -1]; N.mouth = 'open'; }   // then screaming
+    let behind = false, thrown = null;
+    if (sa >= SEND.reach && sa < SEND.toss) {
+      const held = this.heldAt(sa, T, R);
+      if (sa < SEND.grab) {   // he swoops in under Nailong; Nailong drifts down into his raised hands
+        const u = ease(clamp((sa - SEND.reach - 0.12)/(SEND.grab - SEND.reach - 0.12), 0, 1));
+        N.x = lerp(nfx, held.x, u); N.y = lerp(nfy, held.y, u) - 46*Math.sin(u*Math.PI); N.rot = lerp(N.rot, held.rot, u);
+        N.look = [-0.4, 0.8];
+      } else { N.x = held.x; N.y = held.y; N.rot = held.rot; N.sy = held.sy; N.look = sa < SEND.wind ? [0, 0.9] : [1, 0.6]; N.flail = sa*34; }
+      behind = sa > SEND.reach + 0.25;   // over his head: behind it, his hands in front
     }
-    ground(gy);
-    // Max: waves while he says hi, points up at Nailong, looks worried when it gets loud
-    const wave = T >= INTRO_HI - 0.2 && T < INTRO_POINT - 0.3;
-    const point = T >= INTRO_POINT - 0.3 && T < INTRO_Q_T;
-    const armR = wave ? -2.55 + Math.sin(T*9)*0.32 : point ? lerp(-0.2, -2.55, ease(clamp((T - INTRO_POINT + 0.3)/0.3, 0, 1))) : 0;
-    const longArms = sa >= SEND.reach && sa < SEND.end;   // back to his own arms once they have sprung back
-    let look = point || (fallOn && T < INTRO_Q_T) ? [0.9, -0.9] : this.mode === 'no' ? [0, 0.6] : [0.3, 0];
-    if (sa >= SEND.out) look = sa < SEND.wind ? [0.9, -0.8] : sa < SEND.toss ? [0.2, -1] : [1, -0.4];   // eyes on Nailong, then after him
+    if (sa >= SEND.toss) {   // thrown down, head first, off the bottom of the screen
+      const rel = this.heldAt(SEND.toss, T - (sa - SEND.toss), this.rig(T - (sa - SEND.toss), SEND.toss, mx0, my0, k));
+      const u = sa - SEND.toss, vx = 650, vy0 = 250, gr = 1300, vy = vy0 + gr*2*u;
+      thrown = {x: rel.x + vx*u, y: rel.y + vy0*u + gr*u*u, u};
+      const head = Math.atan2(vy, vx) + Math.PI/2;
+      N = {x: thrown.x, y: thrown.y, s: NL_S, rot: lerp(rel.rot, head, ease(clamp(u/0.2, 0, 1))), arms: 'up', flail: sa*50, look: [0, -1], mouth: 'open'};
+      behind = u < 0.15;   // stays behind his head until clear of his face
+      if (N.y > H + 40) N = null;
+    }
+    // speed lines streaming up past the two of them
+    if (!asking || this.mode === 'ask') {
+      ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+      const lines = (cx, cy, wd, n, sp) => { for (let i = 0; i < n; i++) { const lx = cx - wd/2 + (i + 0.5)*wd/n, ly = cy + 170 - ((rush*sp + i*137) % 380); ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx, ly - 44); ctx.stroke(); } };
+      lines(mx, my - 160*k, 200, 5, 1.4);
+      if (N && !thrown && sa < SEND.reach) lines(N.x, N.y - 60, 130, 4, 1.7);
+      ctx.restore();
+    }
+    if (thrown && N && thrown.u < 0.6) this.trail(N, thrown.u);   // behind Max, so it never crosses his face
+    if (N && behind) nailong(N.x, N.y, N.s, N);
+    // Max: waves while he says hi, points at Nailong, looks worried when it gets loud; his own arms for the catch and the throw
+    const wave = T < INTRO_POINT - 0.3 ? clamp((T - INTRO_HI + 0.2)/0.25, 0, 1) : 0;
+    const pointK = T >= INTRO_POINT - 0.3 ? (T < INTRO_Q_T ? ease(clamp((T - INTRO_POINT + 0.3)/0.3, 0, 1)) : 1 - ease(clamp((T - INTRO_Q_T)/0.3, 0, 1))) : 0;
+    const sh = toWorld(42, -158), aim = -Math.atan2(nfx - sh[0], (nfy - 55) - sh[1]) + lean;   // his arm angle pointing at Nailong
+    const rest = -0.3;
+    let armR = rest;
+    if (wave > 0) armR = lerp(rest, -2.55 + Math.sin(T*9)*0.32, ease(wave));
+    if (pointK > 0) armR = lerp(T < INTRO_Q_T ? -2.55 : rest, aim, pointK);   // from the wave straight over to the point, then back down
+    const arms = this.armsAt(sa, R);
+    let look = T < INTRO_HI ? [0.3, 0] : [0.3, 0];
+    if (pointK > 0.5 || (fallOn && T < INTRO_Q_T)) look = [0.9, -0.5];
+    if (sa >= SEND.out) look = sa < SEND.grab ? [0.6, -1] : sa < SEND.toss ? [0.1, -1] : sa < SEND.toss + 0.6 ? [1, 0.8] : [0.6, 0.1];
     if (asking) look = this.mode === 'no' ? [0, 0.6] : [0.6, 0.1];   // then on her and the buttons
     const mouth = this.mode === 'no' || (loud > 0.3 && T < INTRO_Q_T) || (sa >= SEND.wind && sa < SEND.toss + 0.25) ? 'o' : 'smile';
-    const ya = this.mode === 'yes' ? t - this.at : -1;
-    const hop = (sa >= 0 && sa < 0.45 ? Math.abs(Math.sin(sa*9))*14 : 0) + (ya >= 0 && ya < 0.45 ? Math.abs(Math.sin(ya*9))*16 : 0);   // a hop as he starts, and a happy one for her Yes
-    const lean = this.leanAt(sa);
-    ctx.save(); ctx.translate(mx, gy - hop); ctx.rotate(lean); ctx.translate(-mx, -(gy - hop));
-    person(mx, gy - hop, ms, CAST.max, {armR: longArms ? 0 : armR, finger: point && !longArms, look, mouth, noArms: longArms});
+    ctx.save(); ctx.translate(R.piv[0], R.piv[1]); ctx.rotate(lean); ctx.translate(-R.piv[0], -R.piv[1]);
+    person(mx, my, ms, CAST.max, {armR, armL: rest*(1 - pointK), finger: pointK >= 1 && !arms, look, mouth, noArms: !!arms});
     ctx.restore();
-    const head = gy - 272*CAST.max.h*ms;   // top of his head
+    if (arms) for (const h of arms) noodleArm(toWorld(...h.s), toWorld(...h.e), 0, 0, k);
+    const head = my - 272*k;   // top of his head
     // his lines
     if (T >= INTRO_HI && T < INTRO_POINT - 0.4) bubble(LINES_INTRO.hi + ' ' + LINES_INTRO.gameName, mx + 30, head - 6, 34, Math.min(380, W*0.34));
     if (T >= INTRO_POINT && T < INTRO_LOUD + 0.8) bubble(LINES_INTRO.thatsNailong, mx + 40, head - 6, 38, 360);
     if (this.mode === 'no' && t - this.at > 0.35) bubble(LINES_INTRO.comeBack, mx + 30, head - 6, 34, Math.min(380, W*0.34));
-    if (sa >= SEND.say && sa < SEND.out + 0.1) { ctx.save(); bubble(LINES_INTRO.sendTo, mx + 30, head - 6, 38, Math.min(520, W*0.42)); ctx.restore(); }
+    if (sa >= SEND.say && sa < SEND.out + 0.1) { ctx.save(); bubble(LINES_INTRO.sendTo, mx + 30, head - 6, 38, Math.min(560, W*0.46)); ctx.restore(); }
     // the name as a sticker title while he says it
     const lg = clamp((T - INTRO_LOGO)/0.35, 0, 1), lgOut = clamp((T - INTRO_FALL + 0.4)/0.4, 0, 1);
     if (lg > 0 && lgOut < 1) {
-      ctx.save(); ctx.globalAlpha = 1 - lgOut; ctx.translate(W*0.64, H*0.5); const z = fxBack(lg); ctx.scale(z, z); ctx.rotate(-0.04 + Math.sin(T*1.7)*0.015);
-      title(LINES_INTRO.logo, 0, 0, Math.min(70, W*0.55/LINES_INTRO.logo.length*1.75)); ctx.restore();
+      ctx.save(); ctx.globalAlpha = 1 - lgOut; ctx.translate(W*0.72, H*0.5); const z = fxBack(lg); ctx.scale(z, z); ctx.rotate(-0.04 + Math.sin(T*1.7)*0.015);
+      title(LINES_INTRO.logo, 0, 0, Math.min(70, W*0.5/LINES_INTRO.logo.length*1.75)); ctx.restore();
     }
+    // Nailong notices: a "!" over him as the gust hits, just before the scream
+    if (T >= INTRO_FALL - 0.15 && T < INTRO_FALL + 0.75) fxMark('bang', nfx + 34, nfy - 112, (T - INTRO_FALL + 0.15)/0.9, 0.9);
     // the scream: a few more letters and a bigger size every beat (0.7 scene s = 1 real second), then huge
     if (fallOn && T < INTRO_Q_T) {
       const beat = Math.floor(ft/0.7), n = Math.min(LINES_INTRO.scream.length, 3 + beat);
@@ -194,12 +219,11 @@ const INTRO = {
       font(100); const w100 = ctx.measureText(txt).width;
       const small = 30 + Math.min(beat, 6)*8, big = Math.min(190, W*0.9/w100*100);
       const size = lerp(small, big, ease(loud)), pulse = 1 + 0.06*Math.max(0, Math.sin(ft/0.7*Math.PI*2));
-      const sx = lerp(nx, W*0.5, ease(loud)), sy = lerp(ny + 46, H*0.27, ease(loud));
+      const sx = lerp(nfx + 50 + w100*small/200, W*0.5, ease(loud)), sy = lerp(nfy - 70, H*0.27, ease(loud));   // out of his mouth to the right, then across the sky
       ctx.save(); ctx.globalAlpha = 1 - clamp((T - INTRO_Q_T + 0.7)/0.6, 0, 1); ctx.translate(sx, sy); ctx.scale(pulse, pulse); ctx.rotate(Math.sin(T*13)*0.02*loud);
       title(txt, 0, 0, size, '#fff'); ctx.restore();
     }
-    if (sa < 0) { if (fallOn) nailong(nx, ny, 0.5, {rot: Math.sin(T*6)*0.45, arms: 'up', flail: T*18, look: [0, -1], mouth: 'open'}); }
-    else this.sendOff(sa, T, nx, ny, mx, gy - hop, ms, lean);
+    if (N && !behind) nailong(N.x, N.y, N.s, N);
     ctx.restore();
     // the question and the three buttons
     if (asking) {
@@ -218,97 +242,76 @@ const INTRO = {
     if (k0 > 0 && this.mode === 'clip') { ctx.fillStyle = `rgba(29,22,64,${k0})`; ctx.fillRect(0, 0, W, H); }
   },
 
-  // Max leans back for the wind-up and forward on the throw (radians about his feet)
+  // how far the clouds have streamed up (scene seconds in, px): steady, a gust when the scream starts, calmer after the throw
+  rushAt(T, sa){
+    const v = (TT) => 380*TT + 280*Math.max(0, TT - INTRO_FALL + 0.1);
+    if (!(sa > SEND.toss)) return v(T);
+    const u = sa - SEND.toss;
+    return v(T - u) + 300*u + 180*(1 - Math.exp(-2*u));
+  },
+  // where Max is: falling on the left with a slow bob; swoops right and down under Nailong to catch him, heaves, leans; drifts back for the question
+  rig(T, sa, mx0, my0, k){
+    let sw = 0;
+    if (sa >= SEND.reach) sw = sa < SEND.toss + 0.3 ? ease(clamp((sa - SEND.reach)/(SEND.grab - SEND.reach), 0, 1)) : 1 - ease(clamp((sa - SEND.toss - 0.3)/(SEND.ask - 0.05 - SEND.toss - 0.3), 0, 1));
+    const ya = this.mode === 'yes' ? T + this.base - this.at : -1;
+    const hop = (sa >= 0 && sa < 0.45 ? Math.abs(Math.sin(sa*9))*14 : 0) + (ya >= 0 && ya < 0.45 ? Math.abs(Math.sin(ya*9))*16 : 0);   // a bob as he starts, and a happy one for her Yes
+    const heave = sa >= SEND.pull && sa < SEND.wind + 0.3 ? 14*Math.sin(clamp((sa - SEND.pull)/0.22, 0, 1)*Math.PI) : 0;   // he dips to heave Nailong up
+    const mx = lerp(mx0, mx0 + 140, sw), my = lerp(my0, my0 + 44, sw) + Math.sin(T*1.7)*7*(1 - sw) - hop + heave;
+    const lean = this.leanAt(sa) + Math.sin(T*1.1)*0.03*(1 - sw);
+    const piv = [mx, my - 120*k], c = Math.cos(lean), s = Math.sin(lean);
+    const toWorld = (lx, ly) => { const x = lx*k, y = (ly + 120)*k; return [piv[0] + c*x - s*y, piv[1] + s*x + c*y]; };
+    return {mx, my, lean, piv, toWorld, k};
+  },
+  // Nailong held over Max's head (world feet position, rotation, squash), from the catch to the throw
+  heldAt(sa, T, R){
+    const lift = sa < SEND.pull ? 0 : fxBack(clamp((sa - SEND.pull)/0.45, 0, 1));   // caught a little low, then pushed up high
+    const tilt = sa < SEND.wind ? 0 : -0.15*ease(clamp((sa - SEND.wind)/0.35, 0, 1)) + Math.sin(sa*40)*0.03;
+    const gy = lerp(-256, -272, lift), g = R.k;   // the middle of his hands, in Max's own units
+    const s = NL_S, c = Math.cos(R.lean + tilt), sn = Math.sin(R.lean + tilt);
+    const mid = R.toWorld(0, gy), dy = -NL_GRIP[1]*s;   // from the hands down to Nailong's feet
+    const sy = sa >= SEND.grab && sa < SEND.grab + 0.2 ? 1 - 0.12*Math.sin((sa - SEND.grab)/0.2*Math.PI) : 1;
+    return {x: mid[0] - sn*dy, y: mid[1] + c*dy, rot: R.lean + tilt, sy, gy, tilt, gw: NL_GRIP[0]*s/g};
+  },
+  // Max's own arms (normal length) from his shoulders to his hands, in his own units, or null for person()'s arms
+  armsAt(sa, R){
+    if (sa < SEND.reach || sa >= SEND.ask) return null;
+    const UPY = -168;
+    const pol = (side, phi, L, up) => ({s: [side*42, lerp(-158, UPY, up)], e: [side*42 + L*Math.sin(phi), lerp(-158, UPY, up) + L*Math.cos(phi)]});
+    const held = this.heldAt(Math.min(sa, SEND.toss), 0, R);
+    // the hands on Nailong's sides, in Max's units (the tilt turns them about their middle)
+    const hand = side => { const c = Math.cos(held.tilt), sn = Math.sin(held.tilt), x = side*held.gw; return [c*x, held.gy + sn*x]; };
+    const polar = side => { const h = hand(side), dx = h[0] - side*42, dy = h[1] - UPY; let phi = Math.atan2(dx, dy); if (side > 0 && phi < 0) phi += Math.PI*2; if (side < 0 && phi > 0) phi -= Math.PI*2; return {phi, L: Math.hypot(dx, dy)}; };
+    if (sa < SEND.grab) {   // both arms swing up from his sides to over his head
+      const u = ease(clamp((sa - SEND.reach)/(SEND.grab - SEND.reach), 0, 1));
+      const pR = polar(1), pL = polar(-1);
+      return [pol(1, lerp(0.3, pR.phi, u), lerp(75, pR.L, u), u), pol(-1, lerp(-0.3, pL.phi, u), lerp(75, pL.L, u), u)];
+    }
+    if (sa < SEND.toss) return [1, -1].map(side => ({s: [side*42, UPY], e: hand(side)}));
+    // the throw: his right arm swings over to the right and down after him, his left comes down its own side (never across his face), then both back to his sides
+    const pR = polar(1), pL = polar(-1), FT = 1.3;
+    const sw = ease(clamp((sa - SEND.toss)/0.18, 0, 1)), back = ease(clamp((sa - SEND.toss - 0.4)/0.5, 0, 1));
+    const up = 1 - ease(clamp((sa - SEND.toss)/0.3, 0, 1));
+    const phR = lerp(lerp(pR.phi, FT, sw), 0.3, back), phL = lerp(lerp(pL.phi, -1.0, sw), -0.3, back);
+    const LR = lerp(lerp(pR.L, 78, sw), 75, back), LL = lerp(lerp(pL.L, 80, sw), 75, back);
+    return [pol(1, phR, LR, up), pol(-1, phL, LL, up)];
+  },
+
+  // Max leans back for the wind-up and forward on the throw (radians about his waist)
   leanAt(sa){
     if (sa < SEND.wind) return 0;
     if (sa < SEND.toss) return lerp(0, -0.13, ease(clamp((sa - SEND.wind)/0.35, 0, 1)));
     const u = sa - SEND.toss;
     return u < 0.12 ? lerp(-0.13, 0.16, u/0.12) : 0.16*Math.exp(-(u - 0.12)*5)*Math.cos((u - 0.12)*11);
   },
-  // ---- after her Yes: the letters, the long arms, the toss. Nailong's last falling spot is (nx, ny); Max's feet at (mx, my) ----
-  sendOff(sa, T, nx, ny, mx, my, ms, lean){
-    const k = ms*CAST.max.h;
-    const toWorld = (lx, ly) => [mx + Math.cos(lean)*lx - Math.sin(lean)*ly, my + Math.sin(lean)*lx + Math.cos(lean)*ly];
-    const shoulders = [toWorld(-42*k, -158*k), toWorld(42*k, -158*k)], rest = [toWorld(-42*k, -83*k), toWorld(42*k, -83*k)];
-    const hold = toWorld(0, -350*k), wound = toWorld(-75*k, -330*k);
-    // Nailong's pose: falling where he was, grabbed, reeled in overhead, wound back, thrown head first along an arc
-    const P = {x: nx, y: ny, s: 0.5, rot: Math.sin(T*6)*0.45, arms: 'up', flail: T*18, look: [0, -1], mouth: 'open'};
-    const vx = 2700, vy0 = -720, gr = 1250;
-    if (sa >= SEND.grab) { P.look = [0, 0.6]; P.mouth = 'o'; P.flail = T*30; }
-    if (sa >= SEND.pull) {
-      const u = clamp((sa - SEND.pull)/(SEND.wind - SEND.pull), 0, 1), e = fxBack(u);
-      P.x = lerp(nx, hold[0], e); P.y = lerp(ny, hold[1], e); P.s = lerp(0.5, 0.62, ease(u)); P.rot = lerp(P.rot, 0, ease(u)); P.mouth = 'open'; P.look = [-0.6, 0.4];
-    }
-    if (sa >= SEND.wind) {
-      const u = ease(clamp((sa - SEND.wind)/0.4, 0, 1));
-      P.x = lerp(hold[0], wound[0], u); P.y = lerp(hold[1], wound[1], u); P.s = 0.62; P.rot = lerp(0, 1.05, u) + Math.sin(sa*40)*0.04*u;
-      P.arms = 'up'; P.flail = sa*40; P.look = [1, -0.5]; P.mouth = 'open';
-    }
-    let thrown = null;
-    if (sa >= SEND.toss) {   // head first: his head points along the way he is flying
-      const u = sa - SEND.toss, vy = vy0 + gr*2*u;
-      thrown = {x: wound[0] + vx*u, y: wound[1] + vy0*u + gr*u*u};
-      P.x = thrown.x; P.y = thrown.y; P.rot = Math.atan2(vy, vx) + Math.PI/2; P.arms = 'up'; P.flail = sa*50; P.look = [0, -1];
-      if (u < 0.6) {   // speed streaks and the scream trailing behind him
-        ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 6;
-        for (let i = 0; i < 4; i++) {
-          const du = 0.03 + i*0.035, uu = u - du; if (uu < 0) continue;
-          const bx = wound[0] + vx*uu, by = wound[1] + vy0*uu + gr*uu*uu - 40*P.s + (i - 1.5)*16;
-          ctx.beginPath(); ctx.moveTo(bx - 30, by); ctx.lineTo(bx - 120 - i*18, by - (vy0 + gr*2*uu)*0.035); ctx.stroke();
-        }
-        ctx.restore();
-        ctx.save(); ctx.globalAlpha = clamp(1 - (u - 0.35)/0.25, 0, 1)*clamp(u/0.06, 0, 1);
-        title(LINES_INTRO.trail, P.x - 120, P.y - 70, 38, '#fff'); ctx.restore();
-      }
-    }
-    // where the hands are
-    const hands = [0, 1].map(i => {
-      const side = i ? 1 : -1;
-      const grip = () => { const lx = side*50*P.s, ly = -78*P.s, c = Math.cos(P.rot), sn = Math.sin(P.rot); return [P.x + c*lx - sn*ly, P.y + sn*lx + c*ly]; };
-      if (sa < SEND.reach) return rest[i];
-      if (sa < SEND.grab) {   // out they go: a steady stretch, a touch past him, a wobble back onto him
-        const u = (sa - SEND.reach)/(SEND.grab - SEND.reach), g = grip();
-        const e = u < 0.72 ? 1.1*ease(u/0.72) : 1 + 0.1*Math.cos((u - 0.72)/0.28*Math.PI*1.5)*(1 - (u - 0.72)/0.28);
-        return [lerp(rest[i][0], g[0], e), lerp(rest[i][1], g[1], e)];
-      }
-      if (sa < SEND.toss + 0.1) return grip();
-      // let go: the arms spring back past his sides and wobble to rest
-      const u = sa - SEND.toss - 0.1, rx = wound[0] + vx*0.1 + side*50*0.62, ry = wound[1] + vy0*0.1 + gr*0.01, sp = Math.exp(-u*4.5)*Math.cos(u*13);
-      return [rest[i][0] + (rx - rest[i][0])*sp, rest[i][1] + (ry - rest[i][1])*sp];
-    });
-    // how much the arms wobble: a lot while they stretch out, a little while they hold, a lot again as they spring back
-    let wob = 0;
-    if (sa >= SEND.reach && sa < SEND.grab + 0.4) wob = 34*Math.sin(clamp((sa - SEND.reach)/(SEND.grab + 0.4 - SEND.reach), 0, 1)*Math.PI);
-    else if (sa >= SEND.pull && sa < SEND.wind) wob = 22*Math.sin(clamp((sa - SEND.pull)/(SEND.wind - SEND.pull), 0, 1)*Math.PI);
-    else if (sa >= SEND.toss) wob = 30*Math.exp(-(sa - SEND.toss)*3);
-    // the letters: B, then C, then C, each slamming down from big with a ring of dust
-    // then, as the arms set off, they tip over and drop out of the bottom of the screen one after another
-    const sz = Math.min(250, W*0.19), cx = W*0.64, cy = H*0.56;
-    [SEND.b, SEND.c1, SEND.c2].forEach((at, i) => {
-      const u = sa - at, fu = Math.max(0, sa - SEND.out - i*0.06); if (u < 0 || fu > 0.7) return;
-      const land = clamp(u/0.1, 0, 1), x = cx + (i - 1)*sz*0.8 + fu*(i - 1)*120, rot = [-0.07, 0.05, -0.03][i] + fu*fu*[-3, 2.5, 3.5][i];
-      const sq = land < 1 ? lerp(2.8, 1, land*land) : 1 + 0.16*Math.sin((u - 0.1)*32)*Math.exp(-(u - 0.1)*9);
-      if (land >= 1 && !fu) fxRing(x, cy + sz*0.35, (u - 0.1)/0.45, sz*0.2, sz*0.9, '#fff', 10);
-      ctx.save(); ctx.globalAlpha = land; ctx.translate(x, cy - fu*260 + fu*fu*2200); ctx.rotate(rot); ctx.scale(sq, sq);
-      font(sz); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-      ctx.fillStyle = 'rgba(29,22,64,.28)'; ctx.fillText(LINES_INTRO.bcc[i], 9, 13);   // a drop shadow under the sticker
-      ctx.lineWidth = sz*0.11; ctx.strokeStyle = C.line; ctx.strokeText(LINES_INTRO.bcc[i], 0, 0);   // a thinner outline than title(), so the B keeps its holes
-      ctx.fillStyle = i ? '#e8423b' : C.y; ctx.fillText(LINES_INTRO.bcc[i], 0, 0);
-      ctx.restore();
-    });
-    // the twinkle where he left the screen
-    if (sa >= SEND.star && sa < SEND.star + 0.5) {
-      const u = (sa - SEND.star)/0.5, r = 34*Math.sin(u*Math.PI), x = W - 60, y = clamp(wound[1] + vy0*0.47 + gr*0.47*0.47, 60, H*0.4);
-      ctx.save(); ctx.translate(x, y); ctx.rotate(u*2); ctx.beginPath();
-      for (let j = 0; j < 8; j++) { const r2 = j % 2 ? r*0.28 : r, an = j*Math.PI/4; if (j) ctx.lineTo(Math.cos(an)*r2, Math.sin(an)*r2); else ctx.moveTo(Math.cos(an)*r2, Math.sin(an)*r2); }
-      ctx.closePath(); ctx.fillStyle = '#fff6c8'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.lineJoin = 'round'; ctx.stroke(); ctx.restore();
-    }
-    // draw: Nailong while held goes behind the arms (the hands hold him); once thrown he flies in front of everything
-    if (!thrown) nailong(P.x, P.y, P.s, P);
-    if (sa >= SEND.reach) for (let i = 0; i < 2; i++) noodleArm(shoulders[i], hands[i], wob*(i ? 1 : -0.8), sa*14 + i*1.7, k);
-    if (thrown && thrown.x < W + 200) nailong(P.x, P.y, P.s, P);
+  // speed streaks and his scream trailing behind him as he dives
+  trail(P, u){
+    ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 6;
+    const vx = 650, vy = 250 + 2600*u, L = Math.hypot(vx, vy), bx = -vx/L, by = -vy/L, px = -by, py = bx;
+    for (let i = 0; i < 4; i++) { const o = (i - 1.5)*22, x0 = P.x + px*o + bx*30, y0 = P.y + py*o + by*30; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + bx*(90 + i*20), y0 + by*(90 + i*20)); ctx.stroke(); }
+    ctx.restore();
+    ctx.save(); ctx.globalAlpha = clamp(1 - (u - 0.35)/0.25, 0, 1)*clamp(u/0.06, 0, 1);
+    title(LINES_INTRO.trail, P.x + bx*150, P.y + by*150, 38, '#fff'); ctx.restore();
   },
-
   // ---- the lock: black, a sleeping Nailong, a big countdown; at 0 she can start again ----
   drawLock(t){
     const k = clamp((t - this.lockAt)/0.6, 0, 1), left = Math.max(0, this.until - Date.now()), done = left <= 0;

@@ -34,7 +34,7 @@ const BB_COLS = ['#FFD21F', '#ff7a3d', '#ef476f', '#4fa8ff', '#52c56a', '#a77bf0
 // ---- the road: one level, tuned so a quick player finishes in about 45 to 70 s ----
 const BB_N = 8;                  // roadblocks on the bridge
 const BB_V0 = 0.0165;            // the car's steady speed, in bridge lengths per second
-const BB_FIRST = 9;              // seconds of driving before the car reaches the first block (the domino in the first tray clears it)
+const BB_FIRST = 14;             // seconds of driving before the car reaches the first block (was 9; Max, 13 Oct: "give crony a bit more time on the first block so she can get her bearings")
 const BB_GAP = 6.5;              // seconds of driving between blocks at the steady speed (a line every 6.5 s keeps up)
 const BB_U0 = -0.05, BB_FIN = 1.04;   // the car starts on the left shore and finishes on the right shore
 const BB_PHI = Math.PI * 0.2;    // the bridge is 20% of a circle: 72 degrees of arc, so its ends slope at 36

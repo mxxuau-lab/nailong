@@ -1,12 +1,12 @@
 "use strict";
 // ---------- the end menu: every game, her best, Max's high score underneath ----------
 // Most games score seconds from enter to api.done (lower is better). A game in MENU_SCORED ends with api.done(n) and
-// scores n instead, higher is better (the runner's coins, the octagon's metres). main.js calls MENU.record(id, secs, score).
+// scores n instead, higher is better (the runner's coins); one in MENU_OWN_TIME passes its own seconds (the 360). main.js calls MENU.record(id, secs, score).
 // Her bests persist in localStorage (try/catch everywhere; works with no storage at all).
 
 // TODO Max sets these after playing: his real time in seconds for each game (the runner: his coins). These are placeholders.
 const MAX_SCORES = {
-  octagon: 120,      // METRES, higher is better (the whole level is 238 m). TODO Max sets this after playing (he means to set it low)
+  octagon: 64.0,     // SECONDS (1:04.0), lower is better: a clean run with no bonks is about 61.6 s, so this is a good run with a few bonks and no falls. TODO Max sets this after playing
   tetris: 150,       // TODO Max sets these after playing
   bottlesort: 100,   // TODO Max sets these after playing
   battle: 150,       // TODO Max sets these after playing
@@ -15,7 +15,10 @@ const MAX_SCORES = {
   blockblast: 180,   // TODO Max sets these after playing
 };
 // games scored by a number they pass to api.done (higher is better) instead of seconds, and the unit it is shown in
-const MENU_SCORED = {runner: 'coins', octagon: 'm'};
+const MENU_SCORED = {runner: 'coins'};
+// timed games that time themselves and pass their own seconds to api.done (lower is better, shown like every other time):
+// the 360 counts from the first start to the finish ring, without its instruction card (Max, 13 Oct: "this way we can do a timer")
+const MENU_OWN_TIME = {octagon: true};
 
 const LINES_MENU = {
   title: 'PLAY IT AGAIN',                         // TODO joke
@@ -106,11 +109,12 @@ const MENU = {
   noStore: false, booted: false, first: 0, off: 0, pay: null, minusT: -1,
 
   load() {
-    try { const o = JSON.parse(localStorage.getItem(MENU_KEY) || '{}'); for (const k in o) if (typeof o[k] === 'number' && (o[k] > 0 || (MENU_SCORED[k] && o[k] >= 0))) this.bests[k] = o[k]; } catch (e) { /* no storage: memory only */ }
+    // the 360 used to be scored in metres; a best saved before it became a time (no octagonTime mark) is dropped, never read as seconds
+    try { const o = JSON.parse(localStorage.getItem(MENU_KEY) || '{}'); for (const k in o) if ((k !== 'octagon' || o.octagonTime) && k !== 'octagonTime' && typeof o[k] === 'number' && (o[k] > 0 || (MENU_SCORED[k] && o[k] >= 0))) this.bests[k] = o[k]; } catch (e) { /* no storage: memory only */ }
   },
   save() {
     if (this.noStore) return;
-    try { localStorage.setItem(MENU_KEY, JSON.stringify(this.bests)); } catch (e) { /* no storage: memory only */ }
+    try { localStorage.setItem(MENU_KEY, JSON.stringify({...this.bests, octagonTime: 1})); } catch (e) { /* no storage: memory only */ }
   },
   testRun() { const q = new URLSearchParams(location.search); return window.AUTO || q.get('hold') === '1' || q.has('sim'); },
   // the 12 hour wait: the first time she reaches the menu starts it; each fake payment takes a minute off
@@ -142,7 +146,8 @@ const MENU = {
     if (MENU_SCORED[id]) {
       if (typeof score !== 'number' || !isFinite(score)) { console.warn('MENU: ' + id + ' finished without a score (api.done(n))'); return {id, secs: score, best: this.bests[id], isPB: false, beatMax: false}; }
       v = Math.max(0, Math.round(score));
-    } else if (!isFinite(secs) || secs <= 0) return {id, secs, best: this.bests[id], isPB: false, beatMax: false};
+    } else if (MENU_OWN_TIME[id] && typeof score === 'number' && isFinite(score) && score > 0) v = score;
+    else if (!isFinite(secs) || secs <= 0) return {id, secs, best: this.bests[id], isPB: false, beatMax: false};
     const prev = this.bests[id], isPB = prev == null || menuBetter(id, v, prev);
     if (isPB) { this.bests[id] = v; this.save(); }
     const mx = MAX_SCORES[id];
@@ -156,7 +161,7 @@ const MENU = {
       this.booted = true; this.load();
       if (q.get('demo')) {   // test hook: fake times in memory only, never saved
         this.noStore = true;
-        Object.assign(this.bests, {octagon: 184, tetris: 210.4, bottlesort: 88.8, battle: 97.5, runner: 42});
+        Object.assign(this.bests, {octagon: 66.3, tetris: 210.4, bottlesort: 88.8, battle: 97.5, runner: 42});
       }
       if (q.get('celebrate') && !res) { const id = q.get('celebrate'), v = MENU_SCORED[id] ? Math.round(MAX_SCORES[id] * 1.5) : MAX_SCORES[id] * 0.6; this.bests[id] = v; res = {id, secs: v, best: v, isPB: true, beatMax: true}; }
     }

@@ -3,9 +3,11 @@
 // Story clips have sound too now (Max, 12 Oct: "MORE SOUND EFFECTS"): story.js fires cues as a clip's clock passes them, the
 // mini-games and the menu fire theirs on every physical moment. The names are a fixed list (SFX.names); an unknown name is a
 // silent no-op, so a typo never throws.
-// The music is an ORIGINAL slow Drake-style beat made here in WebAudio (real Drake songs are copyrighted and the game is on
-// a public link): Fm7 / Dbmaj7 / Abmaj7 / Eb at 70 bpm, soft 808, low-passed pad, muted keys, hats with the odd roll, a clap
-// on 3, a little reverb. No samples, no files. It starts on the first key or click and loops for the whole ride.
+// The music is an ORIGINAL upbeat party loop made here in WebAudio (Max, 13 Oct: "it sounds sad af we need upbeat if
+// anything"; the slow Drake-style beat is gone; nothing in it is from a real song, the game is on a public link): C major at
+// 124 bpm, C / F / Am / G, four-on-the-floor kick, clap on 2 and 4, a bouncing octave bass, bright plucky chord stabs on a
+// 3-3-2 bounce, and a short chirpy lead hook with an echo. No samples, no files. It starts on the first key or click and
+// loops for the whole ride.
 // MUSIC.cue('climax') swells the beat for a few seconds (story.js calls it when Mr Shou picks his books up), then settles back.
 // Every hook elsewhere is written `window.SFX && SFX.play('pop')`, so deleting this file, its <script> tag and #muteBtn
 // takes sound out everywhere and nothing else notices.
@@ -111,27 +113,31 @@ window.SFX = (() => {
   };
 
   // ---------- the music ----------
-  // One 8-bar loop (4 chords, twice; the second time a little bell melody on top), scheduled one 1/16 step at a time just
-  // ahead of the audio clock, so it loops with no seam. musicGraph(a, dest) builds it on any context, so a test can render
-  // it into an OfflineAudioContext.
+  // One 8-bar loop at 124 bpm (C, F, Am, G, twice), scheduled one 1/16 step at a time just ahead of the audio clock, so it
+  // loops with no seam. Bars 1 to 4 are the groove with the hook; bars 5 to 8 add open hats and a sparkle, and the last
+  // beat drops the kick for a little clap roll back into the top. musicGraph(a, dest) builds it on any context, so a test
+  // can render it into an OfflineAudioContext.
   const MUSIC_VOL = 0.16;                     // under the sound effects (their master is 0.25 and each voice peaks near it)
-  const BPM = 70, STEP = 60/BPM/4, BAR = 16, LOOP = BAR*8;
+  const BPM = 124, STEP = 60/BPM/4, BAR = 16, LOOP = BAR*8;
   const mtof = m => 440*Math.pow(2, (m - 69)/12);
-  // voicings close together so the pad moves smoothly: Fm7, Dbmaj7, Abmaj7, Eb (with its 9th on top), and each root for the 808
+  // close voicings around middle C (the stabs and the climax swell), and each root for the bass
   const CHORDS = [
-    {pad: [53, 56, 60, 63], root: 41},   // Fm7: F Ab C Eb
-    {pad: [53, 56, 60, 61], root: 37},   // Dbmaj7: F Ab C Db
-    {pad: [51, 55, 56, 60], root: 44},   // Abmaj7: Eb G Ab C
-    {pad: [51, 55, 58, 65], root: 39},   // Eb: Eb G Bb, F on top
+    {pad: [60, 64, 67, 72], root: 36},   // C: C E G C
+    {pad: [60, 65, 69, 72], root: 41},   // F: C F A C
+    {pad: [60, 64, 69, 72], root: 45},   // Am: C E A C
+    {pad: [59, 62, 67, 71], root: 43},   // G: B D G B
   ];
-  // the bell line in bars 5 to 8: [step in the bar, midi note, length in steps]
-  const MELODY = [
-    [[0, 72, 6], [6, 68, 4], [10, 67, 2], [12, 68, 4]],   // C Ab G Ab over Fm7
-    [[0, 65, 8], [10, 68, 3], [13, 72, 3]],                // F . Ab C over Db
-    [[0, 75, 6], [6, 72, 4], [10, 67, 6]],                 // Eb C G over Ab
-    [[0, 70, 6], [6, 67, 4], [12, 65, 4]],                 // Bb G F over Eb
+  // the lead hook, written for this game: [step in the bar, midi note, length in steps], one row per bar. Bars 1-4 ask
+  // (it ends up on the G chord, open), bars 5-8 answer (the same start, then it lands back on C for the loop).
+  const HOOK = [
+    [[0, 72, 1], [1, 76, 1], [3, 79, 2], [6, 76, 1], [8, 84, 2], [11, 83, 1], [12, 79, 3]],    // C:  C E . G . . E . C' . . B G
+    [[0, 81, 2], [3, 77, 1], [4, 81, 1], [6, 84, 2], [10, 81, 1], [12, 79, 2], [14, 77, 2]],   // F:  A . . F A . C' . . . A . G . F
+    [[0, 76, 2], [3, 72, 1], [4, 76, 1], [6, 81, 2], [10, 79, 1], [12, 76, 2], [14, 74, 2]],   // Am: E . . C E . A . . . G . E . D
+    [[0, 74, 2], [3, 79, 1], [4, 83, 3], [8, 86, 2], [11, 83, 1], [12, 79, 4]],                // G:  D . . G B . . . D' . . B G
+    null, null, null,                                                                           // bars 5-7 repeat bars 1-3
+    [[0, 77, 1], [2, 76, 1], [4, 74, 2], [6, 79, 2], [8, 83, 3], [11, 86, 1], [12, 84, 4]],    // G:  F . E . D . G . B . . D' C'
   ];
-  const BASS = [[0, 1.5], [7, 0.4], [10, 0.9]];           // 808 hits: [step, length in seconds]
+  const STABS = [0, 3, 6, 8, 11, 14];          // chord stabs on a 3-3-2, 3-3-2 bounce
   function impulse(a, secs, decay){
     const len = Math.floor(a.sampleRate*secs), b = a.createBuffer(2, len, a.sampleRate);
     for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random()*2 - 1)*Math.pow(1 - i/len, decay); }
@@ -139,67 +145,89 @@ window.SFX = (() => {
   }
   function musicGraph(a, dest, noiseBuf){
     const bus = a.createGain(); bus.gain.value = 1;
-    const comp = a.createDynamicsCompressor(); comp.threshold.value = -18; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.3;
+    const comp = a.createDynamicsCompressor(); comp.threshold.value = -18; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.2;
     bus.connect(comp); comp.connect(dest);
-    const verb = a.createConvolver(); verb.buffer = impulse(a, 2.6, 2.8);
-    const dark = a.createBiquadFilter(); dark.type = 'lowpass'; dark.frequency.value = 3200;
-    const vRet = a.createGain(); vRet.gain.value = 0.5; verb.connect(dark); dark.connect(vRet); vRet.connect(bus);
-    const sat = a.createWaveShaper(); const curve = new Float32Array(1024);
-    for (let i = 0; i < 1024; i++) { const x = i/511.5 - 1; curve[i] = Math.tanh(x*2.2)/Math.tanh(2.2); }
-    sat.curve = curve;
-    const subLp = a.createBiquadFilter(); subLp.type = 'lowpass'; subLp.frequency.value = 700; sat.connect(subLp); subLp.connect(bus);
-    const send = (node, g) => { const sg = a.createGain(); sg.gain.value = g; node.connect(sg); sg.connect(verb); };
+    // a short bright room, and a dotted-1/8 echo for the lead
+    const verb = a.createConvolver(); verb.buffer = impulse(a, 1.3, 3.2);
+    const vRet = a.createGain(); vRet.gain.value = 0.35; verb.connect(vRet); vRet.connect(bus);
+    const dly = a.createDelay(1); dly.delayTime.value = STEP*3; const fb = a.createGain(); fb.gain.value = 0.3;
+    const dTone = a.createBiquadFilter(); dTone.type = 'lowpass'; dTone.frequency.value = 3500;
+    dly.connect(dTone); dTone.connect(fb); fb.connect(dly); const dRet = a.createGain(); dRet.gain.value = 0.45; dTone.connect(dRet); dRet.connect(bus);
+    const send = (node, g, to = verb) => { const sg = a.createGain(); sg.gain.value = g; node.connect(sg); sg.connect(to); };
     // a gain envelope: up over att, hold, down exponentially to silence over rel
     const envG = (t, peak, att, hold, rel) => {
       const g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + att);
       g.gain.setValueAtTime(peak, t + att + hold); g.gain.exponentialRampToValueAtTime(0.0001, t + att + hold + rel); return g;
     };
-    function pad(notes, t, len){
-      const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.6;
-      lp.frequency.setValueAtTime(500, t); lp.frequency.linearRampToValueAtTime(1100, t + len*0.45); lp.frequency.linearRampToValueAtTime(650, t + len + 0.8);
-      const g = envG(t, 0.05, 0.9, Math.max(0, len - 0.9), 1.1); lp.connect(g); g.connect(bus); send(g, 0.6);
-      for (const m of notes) for (const det of [-7, 7]) {
-        const o = a.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mtof(m); o.detune.value = det;
-        o.connect(lp); o.start(t); o.stop(t + len + 2);
-      }
+    function kick(t){
+      const o = a.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(170, t); o.frequency.exponentialRampToValueAtTime(52, t + 0.09);
+      const g = envG(t, 0.85, 0.002, 0.04, 0.22); o.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.32);
+      const sr = a.createBufferSource(), hp = a.createBiquadFilter(); sr.buffer = noiseBuf; hp.type = 'highpass'; hp.frequency.value = 2500;
+      const cg = envG(t, 0.12, 0.001, 0, 0.012); sr.connect(hp); hp.connect(cg); cg.connect(bus); sr.start(t, (t*5.3) % 0.5); sr.stop(t + 0.03);
     }
-    // muted electric piano: a sine with a sine modulating it, the brightness dying away fast
-    function keys(m, t, vel, len = 1.4){
-      const f = mtof(m), c = a.createOscillator(), mo = a.createOscillator(), mg = a.createGain(), lp = a.createBiquadFilter();
-      c.frequency.value = f; mo.frequency.value = f; mg.gain.setValueAtTime(f*1.6, t); mg.gain.exponentialRampToValueAtTime(f*0.08, t + 0.5);
-      mo.connect(mg); mg.connect(c.frequency); lp.type = 'lowpass'; lp.frequency.value = 2000;
-      const g = envG(t, vel, 0.006, 0.02, len); c.connect(lp); lp.connect(g); g.connect(bus); send(g, 0.5);
-      c.start(t); mo.start(t); c.stop(t + len + 0.1); mo.stop(t + len + 0.1);
-    }
-    function bass(m, t, len, slide){
-      const f = mtof(m), o = a.createOscillator(); o.type = 'sine';
-      o.frequency.setValueAtTime(f*2.2, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.045);
-      if (slide) o.frequency.exponentialRampToValueAtTime(f*slide, t + len*0.8);
-      const g = envG(t, 0.62, 0.004, 0.05, len); o.connect(g); g.connect(sat); o.start(t); o.stop(t + len + 0.1);
+    function clap(t, vel = 1){
+      const sr = a.createBufferSource(), bp = a.createBiquadFilter(); sr.buffer = noiseBuf; bp.type = 'bandpass'; bp.frequency.value = 1600; bp.Q.value = 0.9;
+      const g = a.createGain(); g.gain.setValueAtTime(0.0001, t);
+      for (const d of [0, 0.011, 0.022]) { g.gain.linearRampToValueAtTime(0.3*vel, t + d + 0.002); g.gain.exponentialRampToValueAtTime(0.05*vel, t + d + 0.01); }
+      g.gain.linearRampToValueAtTime(0.24*vel, t + 0.034); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      sr.connect(bp); bp.connect(g); g.connect(bus); send(g, 0.4); sr.start(t, (t*7.1) % 0.5); sr.stop(t + 0.25);
     }
     function hat(t, vel, open){
-      const sr = a.createBufferSource(), hp = a.createBiquadFilter(); sr.buffer = noiseBuf; hp.type = 'highpass'; hp.frequency.value = 7800;
-      const g = envG(t, vel, 0.001, 0, open ? 0.16 : 0.035); sr.connect(hp); hp.connect(g); g.connect(bus);
-      sr.start(t, (t*13.7) % 0.5); sr.stop(t + 0.25);
+      const sr = a.createBufferSource(), hp = a.createBiquadFilter(); sr.buffer = noiseBuf; hp.type = 'highpass'; hp.frequency.value = 8000;
+      const g = envG(t, vel, 0.001, 0, open ? 0.13 : 0.03); sr.connect(hp); hp.connect(g); g.connect(bus);
+      sr.start(t, (t*13.7) % 0.5); sr.stop(t + 0.2);
     }
-    function clap(t){
-      const sr = a.createBufferSource(), bp = a.createBiquadFilter(); sr.buffer = noiseBuf; bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = 0.9;
-      const g = a.createGain(); g.gain.setValueAtTime(0.0001, t);
-      for (const d of [0, 0.012, 0.024]) { g.gain.linearRampToValueAtTime(0.28, t + d + 0.002); g.gain.exponentialRampToValueAtTime(0.05, t + d + 0.011); }
-      g.gain.linearRampToValueAtTime(0.22, t + 0.038); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
-      sr.connect(bp); bp.connect(g); g.connect(bus); send(g, 0.7); sr.start(t, (t*7.1) % 0.5); sr.stop(t + 0.3);
+    // the bass: a short plucky saw through a closing filter, bouncing between the root and its octave on every 1/8
+    function bass(m, t){
+      const o = a.createOscillator(), lp = a.createBiquadFilter(); o.type = 'sawtooth'; o.frequency.value = mtof(m);
+      lp.type = 'lowpass'; lp.Q.value = 3; lp.frequency.setValueAtTime(1400, t); lp.frequency.exponentialRampToValueAtTime(260, t + 0.12);
+      const g = envG(t, 0.32, 0.003, 0.05, 0.1); o.connect(lp); lp.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.2);
+    }
+    // a bright chord stab: detuned saws, the filter snapping shut
+    function stab(notes, t, vel){
+      const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 2;
+      lp.frequency.setValueAtTime(4800, t); lp.frequency.exponentialRampToValueAtTime(900, t + 0.15);
+      const g = envG(t, vel, 0.003, 0.03, 0.15); lp.connect(g); g.connect(bus); send(g, 0.25);
+      for (const m of notes) for (const det of [-9, 9]) {
+        const o = a.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mtof(m); o.detune.value = det; o.connect(lp); o.start(t); o.stop(t + 0.25);
+      }
+    }
+    // the lead: a square with a triangle an octave up, a little chirp up into each note, a wobble on the long ones, an echo
+    function lead(m, t, len, vel){
+      const f = mtof(m), o1 = a.createOscillator(), o2 = a.createOscillator(), og = a.createGain(), lp = a.createBiquadFilter();
+      o1.type = 'square'; o2.type = 'triangle'; og.gain.value = 0.5;
+      o1.frequency.setValueAtTime(f*0.96, t); o1.frequency.exponentialRampToValueAtTime(f, t + 0.025);
+      o2.frequency.setValueAtTime(f*1.92, t); o2.frequency.exponentialRampToValueAtTime(f*2, t + 0.025);
+      lp.type = 'lowpass'; lp.Q.value = 1; lp.frequency.setValueAtTime(5000, t); lp.frequency.exponentialRampToValueAtTime(2400, t + 0.2);
+      const g = envG(t, vel, 0.004, Math.max(0.02, len - 0.05), 0.09);
+      o1.connect(lp); o2.connect(og); og.connect(lp); lp.connect(g); g.connect(bus); send(g, 0.3, dly); send(g, 0.12);
+      if (len > 0.3) {
+        const l = a.createOscillator(), lg = a.createGain(); l.frequency.value = 6;
+        lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(f*0.012, t + len); l.connect(lg); lg.connect(o1.frequency); l.start(t); l.stop(t + len + 0.2);
+      }
+      const end = t + len + 0.15; o1.start(t); o2.start(t); o1.stop(end); o2.stop(end);
+    }
+    // a soft bell on the off-beats in the second half: the chord tones, high
+    function bell(m, t, vel){
+      const o = a.createOscillator(); o.type = 'triangle'; o.frequency.value = mtof(m);
+      const g = envG(t, vel, 0.002, 0, 0.25); o.connect(g); g.connect(bus); send(g, 0.3, dly); o.start(t); o.stop(t + 0.3);
     }
     // everything that starts on one 1/16 step of the loop
     function step(n, t){
-      const bar = Math.floor(n/BAR) % 8, st = n % BAR, ch = CHORDS[bar % 4];
-      if (st === 0) { pad(ch.pad, t, STEP*BAR); for (const m of ch.pad) keys(m + 12, t + Math.random()*0.012, 0.045); }
-      if (st === 10 && bar % 2 === 1) for (const m of ch.pad.slice(2)) keys(m + 12, t, 0.035, 0.9);
-      for (const [bs, len] of BASS) if (st === bs) bass(ch.root, t, len, bar % 4 === 3 && bs === 10 ? 1.5 : 0);
-      if (st === 8) clap(t);
-      // hats: soft 16ths with an accent on the 8ths, two gaps for swing, a roll at the end of every 4th bar
-      if (bar % 4 === 3 && st >= 12) { const n2 = st >= 14 ? 3 : 2; for (let k = 0; k < n2; k++) hat(t + k*STEP/n2, 0.06 + 0.02*k); }
-      else if (st !== 3 && st !== 11) hat(t, st % 4 === 0 ? 0.11 : st % 2 === 0 ? 0.075 : 0.045, st === 14 && bar % 2 === 0);
-      if (bar >= 4) for (const [ms, m, ln] of MELODY[bar - 4]) if (ms === st) keys(m + 12, t, 0.07, STEP*ln + 0.6);
+      const bar = Math.floor(n/BAR) % 8, st = n % BAR, ch = CHORDS[bar % 4], late = bar >= 4, fill = bar === 7 && st >= 12;
+      if (st % 4 === 0 && !fill) kick(t);
+      if (st === 4 || st === 12) clap(t);
+      if (fill && st !== 12) clap(t, 0.45 + 0.15*(st - 12));                 // a clap roll back into the top
+      if (st % 2 === 0) bass(ch.root + (st % 4 === 2 ? 12 : 0), t);          // root on the beat, octave on the "and"
+      if (STABS.includes(st)) stab(ch.pad, t, st === 0 ? 0.05 : 0.036);
+      // hats: 1/8s, the off-beats louder; the second half adds soft 1/16s and an open hat on every off-beat
+      if (st % 4 === 2) hat(t, 0.1, late);
+      else if (st % 2 === 0) hat(t, 0.06);
+      else if (late) hat(t, 0.03);
+      if (late && st % 4 === 2) bell(ch.pad[(st >> 2) % 4] + 24, t, 0.022);
+      const row = HOOK[bar] || HOOK[bar - 4];
+      for (const [hs, m, ln] of row) if (hs === st) lead(m, t, STEP*ln, 0.075);
     }
     return {step};
   }

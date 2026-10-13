@@ -835,7 +835,7 @@ function sceneCafe1(T){
 }
 
 // ---------- scene 4 (Max, 12 Oct): Nailong sips a boba from the bottle game ("Whew, that game sucked."), Mr Shou walks in with a pile of
-// maths textbooks and accidentally kicks him (THUD), the argument in Max's words, Nailong grows a big leg and kicks Mr Shou into the
+// maths textbooks and accidentally kicks him (THUD), the argument in Max's words, Nailong jumps up and flying-kicks Mr Shou into the
 // wall, Mr Shou dizzy among his scattered books picks them up one by one while the music climaxes, "Nailong! You're cooked!", cut to the fight.
 // Paced to be read twice: a line holds about 2.5 s of scene time (3.5 s on screen at main.js's 70% clip speed), a beat after each punchline.
 const CAFE2_DUR = 31.0, ST_CAFE2_T = CAFE2_DUR;
@@ -858,6 +858,37 @@ const C2_SFX = [
   ...C2_BOOKS.map((b, k) => [C2.pick + (k + 1)*C2.pickD - 0.03, 'thud', {p: 1.7, g: 0.45}]),
   [C2.cooked[0] + 0.05, 'whoosh', {p: 1.2, g: 0.5}], [C2.cooked[1], 'thwack', {p: 0.7}],
 ];
+// Nailong's flying kick, a pure function of t: the crouch (crouch to grow), the leap up and across (grow to hit, the leg chambered then
+// shooting out from go), the foot on Mr Shou's chest at C2.hit, a short hold, then a rebound back to where he jumped from, landing at
+// C2.wall as Mr Shou hits the wall. His own leg, normal size: drawn with stBigLeg over the left foot it replaces.
+function c2Kick(t, nxB, gy, xS, NS, SS_){
+  const TK = C2.grow, KO = C2.go, HIT = C2.hit, REB = C2.hit + 0.08, LND = C2.wall;
+  const HIP = [-14, -16], LF = 62*NS, LW = 28*NS, ROT_H = 0.5, LEG_A = Math.PI - 0.3;
+  const tx = xS + 36, ty = gy - 132*SS_;                                       // Mr Shou's chest, behind his pile of books
+  const hipAt = (x, y, r) => { const c = Math.cos(r), s = Math.sin(r); return [x + (HIP[0]*c - HIP[1]*s)*NS, y + (HIP[0]*s + HIP[1]*c)*NS]; };
+  const hhx = tx - Math.cos(LEG_A)*LF, hhy = ty - Math.sin(LEG_A)*LF;      // at the hit his hip is one leg length from the chest
+  const hitX = hhx - (HIP[0]*Math.cos(ROT_H) - HIP[1]*Math.sin(ROT_H))*NS, hitY = hhy - (HIP[0]*Math.sin(ROT_H) + HIP[1]*Math.cos(ROT_H))*NS;
+  let x = nxB, y = gy, rot = 0, sx = 1, sy = 1, ext = -1;
+  if (t < TK) { const k = stSeg(t, C2.crouch, TK - 0.08); sy = 1 - 0.2*k; sx = 1 + 0.14*k; rot = 0.08*k; }          // the anticipation crouch
+  else if (t < HIT) {                                                                                                 // the leap: up, across, down onto him
+    const u = stSeg(t, TK, HIT), q = stSeg(t, TK, TK + 0.22);
+    x = lerp(nxB, hitX, Math.pow(u, 1.4)); y = lerp(gy, hitY, u) - 190*Math.sin(Math.PI*u);
+    sy = 1 + 0.16*(1 - q); sx = 1 - 0.1*(1 - q);
+    rot = 0.15*stSeg(t, TK, KO) + (ROT_H - 0.15)*ease(stSeg(t, KO, HIT));
+    if (t > KO - 0.15) ext = t < KO ? 0 : ease(stSeg(t, KO, HIT - 0.03));
+  } else if (t < REB) {                                                                                               // contact
+    const q = Math.sin(Math.PI*stSeg(t, HIT, REB)); x = hitX; y = hitY; rot = ROT_H; ext = 1; sx = 1 - 0.08*q; sy = 1 + 0.06*q;
+  } else if (t < LND) {                                                                                               // the rebound, back home
+    const v = stSeg(t, REB, LND); x = lerp(hitX, nxB, ease(v)); y = lerp(hitY, gy, v) - 80*Math.sin(Math.PI*v);
+    rot = ROT_H*(1 - ease(v)); ext = 1 - ease(stSeg(t, REB, REB + 0.22)); if (ext <= 0.02) ext = -1;
+  } else { const q = Math.sin(Math.PI*stSeg(t, LND, LND + 0.3)); sy = 1 - 0.22*q; sx = 1 + 0.18*q; }                  // lands
+  let leg = null;
+  if (ext >= 0) {
+    const [hx, hy] = hipAt(x, y, rot), aim = Math.atan2(ty - hy, tx - hx);
+    leg = [hx, hy, lerp(10*NS, LF, ext), LW, lerp(Math.PI/2 + 0.6, aim, ext)];
+  }
+  return {x, y, rot, sx, sy, leg};
+}
 function sceneCafe2(t){
   const g = stCafeGeom(), gy = g.gy, NS = 0.95, SS_ = 0.95;
   stCues('cafe2', t, C2_SFX);
@@ -898,25 +929,17 @@ function sceneCafe2(t){
     if (t > C2.hey[0] && t < C2.hey[1]) o.mouth = talk(C2.hey[0], 'o');
     if (t > C2.hey[1] + 0.05) { brows = 'smug'; o.mouth = 'smile'; o.look = [-1, 0]; const q2 = stSeg(t, C2.hey[1] + 0.05, C2.maths[0]); nsy = 1 + 0.06*Math.sin(Math.PI*q2); }
     if (t > C2.maths[0] && t < C2.maths[1]) o.mouth = talk(C2.maths[0], 'smile');
-    if (t > C2.crouch) {                                              // the big leg: crouch, the leg grows, the kick
+    if (t > C2.crouch) {                                              // the flying kick (Max, 13 Oct: "nai longs kick should be him jumping up and doing the kick")
       brows = 'mad'; o.look = [-1, 0];
-      const c = stSeg(t, C2.crouch, C2.grow) - stSeg(t, C2.grow, C2.grow + 0.2);
-      nsy = 1 - 0.14*c; nsx = 1 + 0.1*c; nrot = 0.12*stSeg(t, C2.grow, C2.go) + 0.16*stSeg(t, C2.go, C2.hit) - 0.28*stSeg(t, C2.back, 21.0);
-      o.arms = t > C2.grow && t < 21.0 ? 'up' : 'down'; o.flail = t*6; o.mouth = t > C2.go && t < 21.0 ? 'open' : 'smile';
+      const K = c2Kick(t, nxB, gy, xS, NS, SS_);
+      nx = K.x; ny = K.y; nrot = K.rot; nsx = K.sx; nsy = K.sy;
+      o.arms = t > C2.grow && t < 21.0 ? 'up' : 'down'; o.flail = t*(t < C2.go ? 10 : 4);
+      o.mouth = t > C2.grow && t < 21.0 ? 'open' : 'smile';
       if (t > 21.0) { brows = 'smug'; o.look = [-1, 0.1]; }
       if (t > C2.cooked[0]) { brows = 'sad'; o.mouth = 'o'; }
     }
   }
-  // the big leg (drawn first, so the body covers the hip)
-  if (t > C2.grow && t < 21.0) {
-    const gk = fxBack(stSeg(t, C2.grow, C2.grow + 0.35)), kk = stSeg(t, C2.go, C2.hit), rk = stSeg(t, C2.back, 21.0);
-    const c = Math.cos(nrot), s_ = Math.sin(nrot), hx = nx + (-22*c + 25*s_)*NS, hy = ny + (-22*s_ - 25*c)*NS;
-    const tx = xS + 6, ty = gy - 135*SS_, aim = Math.atan2(hy - ty, hx - tx);
-    const a = lerp(0.05, aim, kk*kk) + (kk === 0 ? Math.sin(t*40)*0.03*stSeg(t, C2.grow + 0.35, C2.go) : 0);
-    const reach = Math.hypot(tx - hx, ty - hy) - 30;
-    const len = lerp(lerp(30, 115, gk), reach, kk*kk)*(1 - ease(rk)), w = lerp(24, 60, Math.min(1, gk))*(1 - ease(rk));
-    stBigLeg(hx, hy, len, w, Math.atan2(-Math.sin(a), -Math.cos(a)));
-  }
+  if (t > C2.wall && t < C2.wall + 0.6) stDust(nxB, gy, stSeg(t, C2.wall, C2.wall + 0.6), 22);   // he lands back where he jumped from
   stShadow(nx, gy + 2, 80*NS);
   (t < C2.kick + 0.05 ? stNailongHolding : nailong)(nx, ny, NS, {...o, sx: nsx, sy: nsy, rot: nrot});   // holding the boba: its two paws are his hands
   if (brows) stBrows(nx, ny, NS, brows, nsx, nsy, nrot);
@@ -978,6 +1001,7 @@ function sceneCafe2(t){
   });
   stShadow(sx, gy + 2, 80*Math.max(0.2, 1 - (gy - sy)/200));
   const hands = stShou(sx, sy, SS_, {...so, still});
+  if (t > C2.crouch && t < C2.wall) { const K = c2Kick(t, nxB, gy, xS, NS, SS_); if (K.leg) stBigLeg(...K.leg); }   // Nailong's own leg, out for the kick, over the foot it replaces and over Mr Shou at the hit
   if (held) {                                                          // the book he lifts: to his raised hand, then onto the pile
     const b = C2_BOOKS[held.k], hr = hands.handR, lift = stSeg(held.u, 0.52, 0.62), place = stSeg(held.u, 0.8, 1.0);
     const top = stShouPt(sx, sy, SS_, so, -43 + (held.k % 2 ? -4 : 3), -97 - held.k*17 - 8);

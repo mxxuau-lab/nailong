@@ -23,9 +23,9 @@ const LINES_CANBERRA = {
   bridgeSign: 'COMMONWEALTH AVE BRIDGE',
   jetSign: 'CAPTAIN COOK MEMORIAL JET',
   splash: 'SPLASH!',
-  dry: 'Nailong is now a wet dragon.',       // TODO joke
+  dry: '',                                  // cut (Max, 13 Oct: "skip the line for nailong is now a wet dragon")
   blocks: 'Why are blocks falling from the sky?',  // TODO joke
-  clear: 'CRONY! Clear the road!',               // TODO joke: the hand-off into Block Blast
+  clear: 'Clear the road!!',                     // Max (13 Oct): "nailong doesn't break the forth wall in the blockbalst scene, so he just says, 'clear the road!!'"
   happy: 'Happy 18th!',                      // TODO joke
   cheer: 'HOORAY!',
   bday: 'Happy Birthday!',                   // Max (13 Oct): the card after the finale, before the replay menu
@@ -659,7 +659,7 @@ function sceneBridge(t) {
     ctx.restore();
   }
   const say = [cx + camry.info.seat[0] * carS, carY - 135];
-  if (t > BR.wetSay && t < BR.wetSay + BR_SAY.wetSay) bubble(LINES_CANBERRA.dry, say[0], say[1], 26, 420);   // wide enough for one line (it used to leave "dragon." alone on a second line)
+  if (LINES_CANBERRA.dry && t > BR.wetSay && t < BR.wetSay + BR_SAY.wetSay) bubble(LINES_CANBERRA.dry, say[0], say[1], 26, 420);   // wide enough for one line (it used to leave "dragon." alone on a second line)
   if (t > BR.why && t < BR.why + BR_SAY.why) bubble(LINES_CANBERRA.blocks, say[0], say[1], 26, 340);
   if (t > BR.clear) { const q = P(t, BR.clear, BR.clear + 0.3); ctx.save(); ctx.translate(say[0] + 40, say[1] - 30); ctx.scale(0.8 + 0.2 * q, 0.8 + 0.2 * q); bubble(LINES_CANBERRA.clear, 0, 10, 30, 380); ctx.restore(); }
   ctx.restore();

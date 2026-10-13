@@ -1,8 +1,9 @@
 // ---------- story-school2.js: the Chinese room (A before Tetris, B after it), the funny faces, the LLC (story-b) ----------
 // Clips, in SCENE seconds (main.js plays clips at 70% speed, so real seconds = scene / 0.7). Pure functions of t, like story.js.
-//   sceneChineseA (CH_A_DUR): THE RIDE OPENS HERE (round 4): tossed by Max at the end of the intro, Nailong flies in head first and
-//     lands on his head in the SECOND row, dizzy, while Liu Lao Shi keeps writing; then he sees Jed's Tetris under the desk, "That's easy.",
-//     Jed offers the phone, it suddenly speeds up, "WHY'S IT SO FAST!!??", zoom into the phone (games/tetris.js picks up from there).
+//   sceneChineseA (CH_A_DUR): THE RIDE OPENS HERE (round 4): thrown down by Max at the end of the intro, Nailong falls through the
+//     ROOF (Max, 13 Oct: "he falls through the roof into the chinese classroom"): the ceiling cracks, bursts, he drops in head first
+//     screaming and lands on his head in the SECOND row (the hole stays in the ceiling), dizzy, while Liu Lao Shi keeps writing; then he sees Jed's Tetris under the desk, "That's easy.",
+//     Jed offers his open MacBook, it suddenly speeds up, "WHY'S IT SO FAST!!??", zoom into its screen (games/tetris.js picks up).
 //   sceneChineseB (CH_B_DUR): she noticed: "move to the front", the sad walk from the second row, a pause, "Can I play ping pong?",
 //     the hard problem, he solves it, she pulls out a bat (into games/pingpong.js).
 //   sceneChineseOut (CH_OUT_DUR): after ping pong, out of her door into the corridor, waving back: "What a fun and nice teacher." (then the cafe).
@@ -14,12 +15,12 @@
 const LINES_SCHOOL2 = {
   chinese: {
     // A: the ride opens here (he lands head first), then Tetris
-    scream: 'AAAAAAAAAAAAAAAAAAA',                        // his scream as he flies in head first (the intro's AAAA)
+    scream: 'AAAAAAAAAAAAAAAAAAA',                        // his scream as he falls through the roof head first (the intro's AAAA)
     thud: 'THUD!',                                        // placeholder, Max to edit (the sound word as he lands on his head)
     easy: 'That\'s easy.',                                // placeholder, Max to edit (his beat: "Nai long starts off telling Jed it's easy")
     try: 'Oh, do you want to try, Nailong?',              // Max's words (Jed)
     fast: 'WHY\'S IT SO FAST!!??',                        // Max's words
-    phoneTime: '1:47', holdTxt: 'HOLD', nextTxt: 'NEXT',  // Jed's phone screen, the same as LINES_TETRIS so the zoom lands on the game
+    phoneTime: '1:47',                                    // the clock on Jed's MacBook, the same as LINES_TETRIS so the zoom lands on the game
     // B: after Tetris
     move: 'Nai Long, move to the front.',                 // Max's words
     ping: 'Can I play ping pong?',                        // Max's words
@@ -363,7 +364,19 @@ function s2Seat(){
   return {lx: W*0.45, ly: H*0.775, ls: 0.78,          // Liu Lao Shi at the board
           nx: W*0.14, ny: H*0.87, ns: 0.78,           // Nailong, second row
           jx: W*0.265, jy: H*0.97, js: 0.72,          // Jed beside him
-          fx: W*0.60, fy: H*0.80, fs: 0.74};         // the front, beside her
+          fx: W*0.315, fy: H*0.675 + 67, fs: 0.56,   // the front: SITTING on the left lime chair of the front row (feet on its seat edge)
+          ffy: H*0.80};                              // the floor by that chair (he walks up to it, then hops onto the seat)
+}
+// a chair's seat seen from the front (lime, like the fan backs) with its two front legs, drawn BEHIND whoever sits on it:
+// their bottom sits on it, their feet hang in front of its edge (Max, 13 Oct: everyone seated sits ON a chair)
+function s2SeatPad(cx, top, w, legTo){
+  const th = Math.max(10, w*0.12);
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.strokeStyle = '#8a8f99'; ctx.lineWidth = Math.max(4, w*0.05);
+  ctx.beginPath(); ctx.moveTo(cx - w*0.36, top + th - 2); ctx.lineTo(cx - w*0.42, legTo); ctx.moveTo(cx + w*0.36, top + th - 2); ctx.lineTo(cx + w*0.42, legTo); ctx.stroke();
+  rr(cx - w/2, top, w, th, 6); ctx.fillStyle = '#a7cb3f'; ctx.fill(); ctx.lineWidth = Math.max(3, w*0.035); ctx.strokeStyle = C.line; ctx.stroke();
+  ctx.fillStyle = '#8fb02e'; rr(cx - w/2 + 5, top + th - 5, w - 10, 3, 1); ctx.fill();
+  ctx.restore();
 }
 function s2FrontRow(){
   const top = H*0.655, x0 = W*0.285, x1 = W*0.44;
@@ -371,20 +384,20 @@ function s2FrontRow(){
   ctx.beginPath(); for (const x of [x0 + 10, x1 - 10]) { ctx.moveTo(x, top + 10); ctx.lineTo(x, H*0.74); } ctx.stroke();
   ctx.fillStyle = '#f7f7f9'; rr(x0, top, x1 - x0, 13, 3); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.line; ctx.stroke();
   ctx.restore();
-  [0.315, 0.405].forEach(f => s2Fan(W*f, H*0.675, 84, 64));    // empty: nobody sits in the front row (drawn after her: she is behind it)
+  [0.315, 0.405].forEach(f => { s2Fan(W*f, H*0.675, 84, 64); s2SeatPad(W*f, H*0.675 + 55, 78, H*0.80); });   // drawn after her: she is behind it
 }
 // the second row's lime chairs, behind Nailong and Jed (Max, 13 Oct: "they aren't sitting on chairs"); drawn before them
 function s2BackChairs(){
   const S = s2Seat();
-  s2Fan(S.nx, S.ny - 128, 150, 100);
-  s2Fan(S.jx, S.jy - 158, 140, 96);
+  s2Fan(S.nx, S.ny - 128, 150, 100); s2SeatPad(S.nx, S.ny - 26*S.ns, 120, S.ny + 16);
+  s2Fan(S.jx, S.jy - 158, 140, 96);  s2SeatPad(S.jx, S.jy - 72*S.js, 112, H + 6);
 }
 // Jed's phone in close-up (Max, 13 Oct: "we can't actually see what Jed's doing from that angle"): a white comic panel up on
 // the right with the phone big inside it, dashed lines back to the real phone (tip = its centre), so the Tetris is readable.
 // k 0..1 pops it in, a fades it.
 function s2Closeup(tip, k, a, rows, fast, rot){
   if (k <= 0.001 || a <= 0.001) return;
-  const cx = W*0.625, cy = H*0.385, pw = 222, ph = 312, sc = fxBack(k), psc = 0.4;
+  const cx = W*0.625, cy = H*0.385, pw = 340, ph = 236, sc = fxBack(k), psc = 0.4;   // landscape: Jed's MacBook
   ctx.save(); ctx.globalAlpha = a;
   ctx.setLineDash([10, 8]); ctx.lineCap = 'round';
   for (const [dx, dy] of [[-pw/2, ph/2 - 20], [-pw/2, -ph/2 + 20]]) {
@@ -455,24 +468,12 @@ function s2Tile(x, y, cs, col, lw){
 // (cx, cy) = the phone's centre, sc = its scale (1 = its size in the Tetris game), rows = rows fallen so far in Jed's game,
 // fast = the speed-up (a light trail behind the falling piece)
 function s2Phone(cx, cy, sc, rot, rows, fast){
-  const L = LINES_SCHOOL2.chinese, PW = 470, PH = H - 46, k = v => Math.max(v, 2.4/sc);   // outlines never thinner than ~2.4 px
-  const PX = -PW/2, PY = -PH/2, SX = PX + 14, SY = PY + 14, SW = PW - 28;
-  const CS = 30, BW = CS*10, BH = CS*S2_VIS, BX = -BW/2, BY = SY + 36, colW = BX - SX - 16, LX = SX + 8, RX = BX + BW + 8;
+  if (typeof tMacGeom !== 'function') return;
+  const L = LINES_SCHOOL2.chinese, k = v => Math.max(v, 2.4/sc), g = tMacGeom(), SX = g.SX, SY = g.SY, SW = TM.SW;
+  const Lo = tMacLayout(SX, SY), CS = 30, BW = CS*10, BH = CS*S2_VIS, BX = Lo.BX, BY = Lo.BY, colW = Lo.cw, LX = Lo.LX, RX = Lo.RX;
   ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot); ctx.scale(sc, sc); ctx.lineJoin = 'round';
-  ctx.lineWidth = k(4); ctx.strokeStyle = C.line; ctx.fillStyle = '#2f5a8a';
-  rr(PX - 7, PY + 130, 12, 46, 4); ctx.fill(); ctx.stroke(); rr(PX - 7, PY + 186, 12, 46, 4); ctx.fill(); ctx.stroke();
-  rr(PX + PW - 5, PY + 170, 12, 74, 4); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#3f6fa3'; rr(PX, PY, PW, PH, 52); ctx.fill(); ctx.lineWidth = k(6); ctx.stroke();
-  ctx.fillStyle = '#15161a'; rr(PX + 6, PY + 6, PW - 12, PH - 12, 46); ctx.fill();
-  ctx.fillStyle = C.navy; rr(SX, SY, SW, PH - 28, 38); ctx.fill();
-  font(16, 600); ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(L.phoneTime, SX + 22, SY + 16);
-  ctx.fillStyle = '#000'; rr(SX + SW/2 - 48, SY + 5, 96, 22, 11); ctx.fill();
-  ctx.fillStyle = '#fff'; for (let i = 0; i < 4; i++) { const bh = 4 + i*2.5; ctx.fillRect(SX + SW - 92 + i*6, SY + 21 - bh, 4, bh); }   // signal and a nearly flat battery
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; rr(SX + SW - 54, SY + 9, 28, 14, 4); ctx.stroke(); ctx.fillRect(SX + SW - 25, SY + 13, 3, 6);
-  ctx.fillStyle = '#e8423b'; rr(SX + SW - 51, SY + 12, 6, 8, 2); ctx.fill();
-  font(15); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(L.holdTxt, LX + colW/2, BY + 10); ctx.fillText(L.nextTxt, RX + colW/2, BY + 10);
-  ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 3;
-  rr(LX, BY + 24, colW, 72, 12); ctx.fill(); ctx.stroke(); rr(RX, BY + 24, colW, 5*50 + 14, 12); ctx.fill(); ctx.stroke();
+  tMacBody(k(4));
+  tMacBar(SX, SY, SW, L.phoneTime);
   ctx.fillStyle = '#120d2e'; rr(BX - 5, BY - 5, BW + 10, BH + 10, 8); ctx.fill(); ctx.lineWidth = k(4); ctx.strokeStyle = '#4b4380'; ctx.stroke();
   const tl = k(2.8);
   S2_STACK.forEach((row, i) => { for (let c = 0; c < 10; c++) if (row[c] !== '.') s2Tile(BX + c*CS, BY + (S2_VIS - 4 + i)*CS, CS, S2_TCOL[row[c]], tl); });
@@ -482,10 +483,15 @@ function s2Phone(cx, cy, sc, rot, rows, fast){
   if (fast && top > 0) { ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(BX + (col + Math.min(...dxs))*CS, BY, (Math.max(...dxs) - Math.min(...dxs) + 1)*CS, (top + 1)*CS); }
   for (const [dx, dy] of cells) s2Tile(BX + (col + dx)*CS, BY + (top + dy)*CS, CS, S2_TCOL[type], tl);
   ctx.restore();
-  for (let i = 0; i < 3; i++) { const [nt, nc] = S2_FALL[(n + 1 + i) % S2_FALL.length]; for (const [dx, dy] of nc) s2Tile(RX + colW/2 - 6 + dx*12, BY + 44 + i*50 + dy*12, 12, S2_TCOL[nt], k(1.6)); }
   ctx.fillStyle = 'rgba(255,255,255,.12)'; rr(BX, BY + BH + 12, BW, 30, 15); ctx.fill(); ctx.lineWidth = k(3); ctx.strokeStyle = C.line; ctx.stroke();
-  if (typeof tPad === 'function') tPad(SX, BY + BH + 42, SW, SY + PH - 28 - (BY + BH + 42));   // the phone's buttons, as in the game
+  if (typeof tPad === 'function') tPad(Lo.padXs, Lo.padY, Lo.padR);   // the on-screen buttons, as in the game
   ctx.restore();
+}
+// where Jed's MacBook sits: open on the second row's desk between him and Nailong (pJ), turned out to Nailong as Jed offers it
+// (pO), slid over in front of Nailong (pN); sc = its size there (the game draws it at 1)
+function s2MacSpots(S){
+  const sc = 62/668, y = H*0.80 - (typeof TM === 'object' ? TM.TH : 482)*sc/2 + 3, mid = (S.nx + S.jx)/2;   // small: both faces stay clear
+  return {sc, pJ: [mid + 7, y], pO: [mid + 4, y], pN: [mid + 1, y]};
 }
 // the moments a piece lands in Jed's game (a soft tick each), worked out once
 function s2Lands(rowsAt, t0, t1){
@@ -494,12 +500,13 @@ function s2Lands(rowsAt, t0, t1){
   return out;
 }
 
-// ---------- clip A: THE RIDE OPENS HERE. Max tossed Nailong head first at the end of the intro: he flies across the Chinese room,
-// screaming, and lands on his head in the SECOND row (thud, legs kicking, dizzy). Liu Lao Shi keeps writing and never notices.
+// ---------- clip A: THE RIDE OPENS HERE. Max threw Nailong down at the end of the intro: he falls through the ROOF of the Chinese
+// room (the ceiling creaks and cracks, bursts, bits of it and dust come down with him, the hole stays), screaming, head first,
+// and lands on his head in the SECOND row (thud, legs kicking, dizzy). Liu Lao Shi keeps writing and never notices.
 // Then Jed's Tetris; WHY'S IT SO FAST; zoom into the phone (into games/tetris.js) ----------
 // Max: "With tetris, Nai long starts off telling Jed it's easy, and then Jed says, oh, do you want to try Nailong? and when Nailong
 // gets it suddenly it speeds up a lot. WHYS IT SO FAST!!??" "Nai long sees Jed playing tetris."
-const CH_A = {fly: 0.45, land: 1.5, pop: 2.6, sit: 2.95, dizzyEnd: 4.2,
+const CH_A = {creak: 0.12, fly: 0.75, land: 1.5, pop: 2.6, sit: 2.95, dizzyEnd: 4.2,
               see: 4.7, easy: 5.4, easyEnd: 7.5, jed: 7.8, offer: 8.9, jedEnd: 10.2, take: 10.2, grab: 10.7, fast: 11.7, why: 12.0, zoom: 14.3};
 const CH_A_DUR = 15.7;                                      // scene seconds (22.4 s real); Jed's offer stays up 3.3 s real
 const S2_GSLOW = 0.12, S2_GFAST = 0.03;                    // Jed's game: seconds per row, then the sudden speed-up
@@ -508,7 +515,8 @@ const CH_A_SFX = [
   [0.15, 'squeak', {g: 0.45}], [1.95, 'squeak', {g: 0.4}], [3.3, 'squeak', {g: 0.45}],                     // her marker: she never stops writing
   ...[0, 1, 2].map(i => [CH_A.dizzyEnd + 0.25 + i*3.6, 'squeak', {g: 0.45}]),
   ...s2Lands(s2RowsA, 0, CH_A.zoom).map(t => [t, 'tick', {p: 1.5, g: 0.3}]),          // a piece lands on the phone
-  [CH_A.fly - 0.3, 'whoosh', {p: 0.6}], [CH_A.fly - 0.1, 'scream'], [CH_A.fly + 0.5, 'whoosh', {p: 0.9}],   // in from behind us, screaming
+  [CH_A.creak, 'clink', {p: 0.5, g: 0.4}], [CH_A.fly - 0.3, 'scream'],                                       // the ceiling creaks, a scream from above
+  [CH_A.fly, 'crash', {p: 1.3}], [CH_A.fly, 'thud', {p: 0.6, g: 0.6}], [CH_A.fly + 0.15, 'whoosh', {p: 0.9}],   // through the ceiling
   [CH_A.land, 'thud', {p: 0.8}], [CH_A.land, 'crash', {g: 0.6}], [CH_A.land + 0.12, 'oof'],                 // head first into his seat
   ...[0, 1, 2].map(i => [CH_A.land + 0.45 + i*0.3, 'squeak', {p: 1.6 + i*0.1, g: 0.35}]),                  // legs kicking in the air
   [CH_A.pop, 'boing'], [CH_A.sit, 'thud', {p: 1.4, g: 0.5}], [CH_A.sit + 0.05, 'dizzy'], [CH_A.dizzyEnd - 0.3, 'swish', {p: 1.6, g: 0.6}],
@@ -516,14 +524,56 @@ const CH_A_SFX = [
   [CH_A.grab + 0.15, 'typing'], [CH_A.grab + 0.6, 'typing'],
   [CH_A.fast, 'buzz'], [CH_A.fast + 0.05, 'boing', {p: 1.3}], [CH_A.why, 'scream'], [CH_A.zoom, 'whoosh'],
 ];
-// the flight: his body centre on a curve from behind the camera (big, below the screen), up across the room and down onto his seat;
-// he turns along the curve so his HEAD always leads. Returns the centre, the turn, the size and the curve itself.
+// the drop: straight down through the ceiling above his seat, head first (upside down), speeding up as he falls.
+// Returns the body centre, the turn, the size, how far (k), the path (at) and the direction (v), like the old flight.
 function s2FlyA(t, S){
-  const k = Math.pow(s2Tw(t, CH_A.fly, CH_A.land), 1.12);
-  const P0 = [W*0.62, H*1.42], P1 = [W*0.22, -H*0.42], P2 = [S.nx, S.ny + 8 - 90*S.ns];
-  const bz = (q, i) => (1 - q)*(1 - q)*P0[i] + 2*q*(1 - q)*P1[i] + q*q*P2[i];
-  const dx = 2*(1 - k)*(P1[0] - P0[0]) + 2*k*(P2[0] - P1[0]), dy = 2*(1 - k)*(P1[1] - P0[1]) + 2*k*(P2[1] - P1[1]);
-  return {x: bz(k, 0), y: bz(k, 1), rot: Math.atan2(dx, -dy), s: lerp(2.1, S.ns, k), k, at: q => [bz(q, 0), bz(q, 1)], v: [dx, dy]};
+  const k = s2Tw(t, CH_A.fly, CH_A.land), y0 = -70, y1 = S.ny + 8 - 90*S.ns, yAt = q => lerp(y0, y1, q*q);
+  return {x: S.nx, y: yAt(k), rot: Math.PI, s: S.ns, k, at: q => [S.nx, yAt(clamp(q, -0.6, 1))], v: [0, 1]};
+}
+// the hole he leaves in the ceiling above his seat: k 0..1 opens it, age = scene s since it burst (a broken tile swings)
+const S2_HOLE = [[-88, 0], [-82, 24], [-64, 36], [-70, 56], [-44, 60], [-30, 80], [-8, 68], [10, 88], [28, 66], [48, 74], [60, 50], [80, 46], [90, 0]];
+function s2Hole(hx, k, age){
+  if (k <= 0.001) return;
+  ctx.save(); ctx.lineJoin = 'round';
+  ctx.beginPath(); S2_HOLE.forEach(([dx, dy], i) => { const px = hx + dx*(0.4 + 0.6*k), py = dy*k; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.closePath();
+  ctx.fillStyle = '#2a2431'; ctx.fill();
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = '#9fd6ff'; ctx.fillRect(hx - 30, 0, 64, 22);                               // a patch of sky through the roof
+  ctx.strokeStyle = '#6b4a2b'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(hx - 95, 30); ctx.lineTo(hx + 95, 14); ctx.stroke();   // a roof beam
+  ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(hx - 40, -5); ctx.lineTo(hx - 52, 90); ctx.stroke();
+  ctx.restore();
+  ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.stroke();
+  // a broken ceiling tile hanging off the edge, still swinging
+  const sw = 0.5 + 0.35*Math.exp(-age*2.2)*Math.sin(age*9);
+  ctx.save(); ctx.translate(hx + 58*k, 50*k); ctx.rotate(sw*k);
+  ctx.fillStyle = '#e1e2e7'; rr(-4, 0, 34, 46, 3); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.line; ctx.stroke(); ctx.restore();
+  // cracks running out from the hole
+  ctx.strokeStyle = C.line; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  for (const [a, b, c2] of [[[-88, 10], [-120, 18], [-138, 8]], [[90, 8], [118, 22], [136, 14]], [[-44, 60], [-58, 78], [-52, 94]]]) {
+    ctx.beginPath(); ctx.moveTo(hx + a[0]*k, a[1]*k); ctx.lineTo(hx + b[0]*k, b[1]*k); ctx.lineTo(hx + c2[0]*k, c2[1]*k); ctx.stroke(); }
+  ctx.restore();
+}
+// the bits of ceiling that come down with him: each falls from the hole, spins, and lies on the floor. falling = true draws the
+// ones still in the air (on top of everything), false the ones already lying on the floor (behind the desks)
+function s2Debris(hx, age, falling){
+  if (age <= 0) return;
+  for (let i = 0; i < 10; i++) {
+    const vx = (i - 4.5)*46 + ((i*37) % 11 - 5)*6, vy = 40 + (i % 4)*40, floorY = H*0.885 + (i % 3)*16, g = 1700;
+    const tl = (-vy + Math.sqrt(vy*vy + 2*g*(floorY - 40)))/g, a = Math.min(age, tl), down = age >= tl;
+    if (down === falling) continue;
+    const x = hx + (i - 4.5)*14 + vx*a, y = 40 + vy*a + 0.5*g*a*a, sz = 12 + (i*7) % 14, r = (i % 2 ? 1 : -1)*(3 + i)*a + i;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(down ? (i % 2 ? 0.2 : -0.15) : r);
+    ctx.fillStyle = i % 3 ? '#e1e2e7' : '#c8cad2'; rr(-sz/2, -sz*0.35, sz, sz*0.7, 2); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.line; ctx.stroke(); ctx.restore();
+  }
+}
+// dust: a puff out of the hole as it bursts, then a few specks drifting down for a while
+function s2Dust(hx, age){
+  if (age <= 0) return;
+  const k = clamp(age/1.3, 0, 1);
+  if (k < 1) for (let i = 0; i < 7; i++) { const a = -0.2 + i*0.55, r = (18 + i*3)*(0.7 + k*1.4);
+    ell(hx + Math.cos(a)*(30 + k*120), 40 + Math.abs(Math.sin(a))*k*90 + k*30, r, r*0.8); ctx.fillStyle = `rgba(236,233,226,${0.85*(1 - k)})`; ctx.fill(); }
+  if (age < 4) for (let i = 0; i < 8; i++) { const ph = (age*0.6 + i*0.131) % 1, sx = hx - 60 + ((i*53) % 120);
+    ctx.fillStyle = `rgba(200,196,188,${0.8*(1 - ph)*(1 - age/4)})`; ctx.fillRect(sx + Math.sin(age*3 + i)*6, 60 + ph*H*0.5, 4, 4); }
 }
 // feet from a body centre: nailong() turns about his feet, so a spin or a head-first dive is worked out round his middle
 const s2Feet = (cx, cy, rot, s) => [cx - Math.sin(rot)*88*s, cy + Math.cos(rot)*88*s];
@@ -562,13 +612,14 @@ function sceneChineseA(t){
   const L = LINES_SCHOOL2.chinese, S = s2Seat(), A = CH_A, fast = t > A.fast;
   s2Cues('chA', t, CH_A_SFX);
   const z = ease(s2Tw(t, A.zoom, CH_A_DUR));               // the zoom into the phone at the end
-  const lk = t - A.land, shake = lk > 0 && lk < 0.55 ? Math.sin(t*80)*12*(1 - lk/0.55) : 0;   // the room shakes as he lands
+  const lk = t - A.land, bk = t - A.fly, shake = (lk > 0 && lk < 0.55 ? Math.sin(t*80)*12*(1 - lk/0.55) : 0)   // the room shakes as he lands
+    + (bk > 0 && bk < 0.35 ? Math.sin(t*90)*7*(1 - bk/0.35) : 0);                                                  // and as the ceiling bursts
   const jj = 26*s2Pulse(t, A.land, A.land + 0.3);         // Jed (and his phone) jump at the thud
-  // the phone: under Jed's desk, held out to Nailong, in Nailong's hands
-  const pJ = [S.jx, S.jy - 83*S.js + 6], pO = [lerp(S.nx, S.jx, 0.6), H*0.765], pN = [S.nx + 40, H*0.84];
-  let ph = [pJ[0], pJ[1] - jj], prot = 0;
-  if (t > A.offer && t < A.take) { const k = ease(s2Tw(t, A.offer, A.offer + 0.5)); ph = [lerp(pJ[0], pO[0], k), lerp(pJ[1], pO[1], k)]; prot = -0.12*k; }
-  else if (t >= A.take) { const k = ease(s2Tw(t, A.take, A.grab)); ph = [lerp(pO[0], pN[0], k), lerp(pO[1], pN[1], k) - Math.sin(Math.PI*k)*26]; prot = lerp(-0.12, -0.06, k); }
+  // Jed's MacBook: open on the desk in front of him, turned out to Nailong, slid over in front of Nailong
+  const MS = s2MacSpots(S), pJ = MS.pJ, pO = MS.pO, pN = MS.pN;
+  let ph = [pJ[0], pJ[1] - jj*0.5], prot = 0;
+  if (t > A.offer && t < A.take) { const k = ease(s2Tw(t, A.offer, A.offer + 0.5)); ph = [lerp(pJ[0], pO[0], k), pJ[1]]; prot = -0.05*k; }
+  else if (t >= A.take) { const k = ease(s2Tw(t, A.take, A.grab)); ph = [lerp(pO[0], pN[0], k), pN[1] - Math.sin(Math.PI*k)*8]; prot = lerp(-0.05, 0, k); }
   if (fast) { ph = [ph[0] + Math.sin(t*47)*2.2, ph[1] + Math.cos(t*53)*1.6]; prot += Math.sin(t*61)*0.05; }
 
   ctx.save();
@@ -576,6 +627,16 @@ function sceneChineseA(t){
   if (shake) { ctx.fillStyle = '#ecebe6'; ctx.fillRect(0, 0, W, H*0.70); ctx.fillStyle = '#585d70'; ctx.fillRect(0, H*0.70, W, H*0.30); }   // no gap at the edge while it shakes
   ctx.translate(shake, shake*0.4);
   s2Room(t);
+  // the ceiling above his seat: it creaks and cracks (a muffled scream from above), bursts, and the hole stays
+  const hx = S.nx;
+  if (t > A.creak && t < A.fly) { const c = s2Tw(t, A.creak, A.fly), jit = Math.sin(t*70)*2*c;
+    ctx.save(); ctx.strokeStyle = C.line; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    for (let i = 0; i < 5; i++) { const a = 0.35 + i*0.6, r = 12 + 50*c; ctx.beginPath(); ctx.moveTo(hx + jit, 18); ctx.lineTo(hx + jit + Math.cos(a)*r*0.6 + 6, 18 + Math.sin(a)*r*0.35); ctx.lineTo(hx + jit + Math.cos(a)*r, 18 + Math.sin(a)*r*0.55); ctx.stroke(); }
+    ctx.restore();
+    for (let i = 0; i < 6; i++) { const ph = (t*1.7 + i*0.17) % 1; ctx.fillStyle = `rgba(200,196,188,${c*(1 - ph)})`; ctx.fillRect(hx - 40 + i*15, 40 + ph*160, 4, 4); }
+  }
+  s2Hole(hx, ease(s2Tw(t, A.fly, A.fly + 0.12)), t - A.fly);
+  s2Debris(hx, t - A.fly, false);                              // the bits already on the floor
   // Liu Lao Shi: back to the class, writing and humming through the whole crash; then teaching as usual (she never notices)
   const lo = {mouth: 'smile', look: [0.5, 0], aL: 0.15, aR: 0.2, marker: true, pony: Math.sin(t*3)*0.1, slip: 0, blink: (t % 3.2) < 0.12 ? 1 : 0};
   if (t < A.dizzyEnd) { lo.aR = 2.3 + Math.sin(t*13)*0.16; lo.aL = 0.15; lo.look = [0.9, -0.5]; }
@@ -631,6 +692,7 @@ function sceneChineseA(t){
   if (here) s2NL(x, y, s, Object.assign(o, {sx, sy, rot}), face === 'smug' ? s2Smug : face === 'shock' ? () => s2Shock(t) : face === 'dizzy' ? () => s2Dizzy(t) : null);
   // Jed beside him, his phone under the desk: jumps at the thud, looks at Nailong, at her (she did not see it?), back to his game
   const jo = {mouth: 'smile', look: [0.1, 1]};
+  if (t > A.fly && t <= A.land) { jo.look = [-0.6, -1]; jo.mouth = 'o'; }                     // the ceiling!
   if (t > A.land && t < A.land + 1.9) { jo.look = [-1, 0.4]; jo.mouth = 'o'; }
   else if (t >= A.land + 1.9 && t < A.land + 2.6) jo.look = [0.8, -0.7];
   if (t > A.easy + 0.5) jo.look = [-1, 0];
@@ -639,6 +701,9 @@ function sceneChineseA(t){
   if (fast) jo.mouth = 'o';
   person(S.jx, S.jy - jj, S.js, CAST.jed, jo);
   s2BackDesk();
+  s2Debris(hx, t - A.fly, true);                               // the bits still falling, in front of everything
+  s2Dust(hx, t - A.fly);
+  if (bk > 0 && bk < 0.35) s2Burst(hx, 34, 50 + bk*150, bk/0.35);
   // the landing: burst, dust along the floor, THUD!, an "!" over Jed
   if (lk > 0 && lk < 0.45) s2Burst(S.nx, S.ny - 10, 70 + lk*160, lk/0.45);
   if (lk > 0 && lk < 0.9) { const k = lk/0.9;
@@ -653,10 +718,13 @@ function sceneChineseA(t){
     s2Star(x + Math.cos(a)*62*s, y - 192*s + Math.sin(a)*14*s, 11, a); }
   fxMark('bang', x + 50*s, y - 195*s, s2Tw(t, A.see, A.see + 0.7), 0.8);
   if (fast) fxMark('sweat', x + 64*s, y - 170*s, s2Tw(t, A.fast + 0.1, A.fast + 1.3));
-  // his scream trails behind him along the curve (like the intro's AAAA)
+  // his scream: muffled above the ceiling before it bursts, then trailing above him as he drops (like the intro's AAAA)
+  const scr = (txt, y, size, a) => { font(size); const w = ctx.measureText(txt).width;
+    ctx.save(); ctx.globalAlpha = a; title(txt, Math.max(hx + 70 + w/2, w/2 + 14), y, size, '#fff'); ctx.restore(); };
+  if (t > A.creak && t < A.fly) { const c = s2Tw(t, A.creak, A.fly); scr(L.scream.slice(0, 3 + Math.floor(c*6)), 30, 22 + 14*c, 0.4 + 0.6*c); }
   if (t > A.fly && t < A.land + 0.12) {
-    const [tx, ty] = F.at(Math.max(F.k - 0.2, -0.3)), n = 5 + Math.floor(F.k*14);
-    ctx.save(); ctx.globalAlpha = t < A.land ? 1 : 1 - (t - A.land)/0.12; title(L.scream.slice(0, n), tx, ty, lerp(70, 38, F.k), '#fff'); ctx.restore();
+    const ty = clamp(F.y - 30, 150, H*0.62), n = 9 + Math.floor(F.k*10);                       // beside him, below the hole
+    scr(L.scream.slice(0, n), ty, lerp(54, 42, F.k), t < A.land ? 1 : 1 - (t - A.land)/0.12);
   }
   // the close-up of Jed's game, under the bubbles: from when Nailong spots it until the zoom takes over
   s2Closeup(ph, ease(s2Tw(t, A.see + 0.1, A.see + 0.4)), 1 - ease(s2Tw(t, A.zoom, A.zoom + 0.3)), s2RowsA(t), fast, prot*0.5);
@@ -666,10 +734,10 @@ function sceneChineseA(t){
   if (t > A.jed && t < A.jedEnd) bubble(L.try, S.jx, jTop, 28, 300);
   if (t > A.why && t < A.zoom) bubble(L.fast, x + 20, nTop - 6, 38, 360);
   ctx.restore();
-  // the phone, on top of everything: in the hands, then up to fill the screen exactly where the Tetris game draws it
-  const sc0 = 50/470, sc = Math.exp(lerp(Math.log(sc0), 0, z));
+  // the MacBook, on top of everything: on the desk, then up to fill the screen exactly where the Tetris game draws it
+  const sc0 = MS.sc, sc = Math.exp(lerp(Math.log(sc0), 0, z)), MC = typeof tMacC === 'function' ? tMacC() : [W/2, H/2 + 34];
   if (z > 0) { ctx.fillStyle = `rgba(29,22,64,${0.35*z})`; ctx.fillRect(0, 0, W, H); }
-  s2Phone(lerp(ph[0] + shake, W/2, z), lerp(ph[1] + shake*0.4, H/2 - 13, z), sc, prot*(1 - z), s2RowsA(t), fast);
+  s2Phone(lerp(ph[0] + shake, MC[0], z), lerp(ph[1] + shake*0.4, MC[1], z), sc, prot*(1 - z), s2RowsA(t), fast);
 }
 
 // ---------- clip B: she noticed. "move to the front", the sad walk, a pause, ping pong?, the hard problem (into games/pingpong.js) ----------
@@ -712,10 +780,13 @@ function sceneChineseB(t){
     const q = s2Pulse(t, B.bang, B.bang + 0.3); sy += 0.15*q; sx -= 0.07*q; y -= 16*q;
   } else if (t < B.walk) {                                   // stands up, the chair scrapes
     const k = s2Tw(t, B.up, B.walk); y -= Math.sin(Math.PI*k)*30; sy = 1 + 0.1*Math.sin(Math.PI*k); o.look = [0.6, 0.6]; sad = true;
-  } else if (t < B.arrive) {                                 // the slow sad walk to the front
-    const k = ease(s2Tw(t, B.walk, B.arrive));
-    x = lerp(S.nx, S.fx, k); y = lerp(S.ny, S.fy, k); s = lerp(S.ns, S.fs, k);
+  } else if (t < B.arrive - 0.35) {                          // the slow sad walk to the front row
+    const k = ease(s2Tw(t, B.walk, B.arrive - 0.35));
+    x = lerp(S.nx, S.fx, k); y = lerp(S.ny, S.ffy, k); s = lerp(S.ns, S.fs, k);
     y -= Math.abs(Math.sin(t*10.1))*5; o.walk = t*10.1; o.look = [0.5, 0.9]; sy = 0.95; sad = true;
+  } else if (t < B.arrive) {                                 // hops up onto the front chair and sits
+    const k = s2Tw(t, B.arrive - 0.35, B.arrive);
+    x = S.fx; s = S.fs; y = lerp(S.ffy, S.fy, ease(k)) - Math.sin(Math.PI*k)*22; o.look = [0.3, 0.9]; sad = true;
   } else {
     x = S.fx; y = S.fy; s = S.fs;
     if (t < B.think) {                                       // the low point, the pause, then the question
@@ -758,9 +829,8 @@ function sceneChineseB(t){
   else if (t < B.praise - 0.3) { lo.mouth = 'o'; lo.slip = 1; lo.look = [0.8, -0.4]; lo.aR = 0.5; lo.aL = 0.4; lo.sy = 1 + 0.03*Math.sin(t*20); }
   else { lo.mouth = talk(); lo.aL = lerp(2.9, 0.7, ease(s2Tw(t, B.praise - 0.2, B.praise + 0.5))); lo.aR = 0.15; lo.look = [0.4, 0]; lo.marker = false; lo.bat = t > B.praise; }
   liuLaoShi(S.lx, S.ly, S.ls, lo);
-  s2FrontRow();
-  s2BackChairs();
-
+  // he is drawn behind the second row's chairs once he is past them on the way to the front (and while he sits there)
+  const drawN = () => {
   s2NL(x, y, s, Object.assign(o, {sx, sy, rot}), sad ? s2SadFace : think ? s2ThinkBrows : null);
   if (tears) {
     for (const d of [-1, 1]) for (let i = 0; i < 2; i++) { const ph = (t*1.4 + i*0.5 + (d > 0 ? 0.2 : 0)) % 1;
@@ -786,22 +856,26 @@ function sceneChineseB(t){
     for (let i = 0; i < 4; i++) { const ph = (t*1.3 + i*0.25) % 1, d = i % 2 ? 1 : -1; ell(hx + d*(58*s + 20 + ph*14), hy - 10 - ph*80, 10 + ph*14, 10 + ph*14); ctx.fillStyle = `rgba(255,255,255,${0.8 - ph*0.8})`; ctx.fill(); }
     const sp = (t*1.2) % 1; ell(hx + 40*s + 14, hy - 40*s + sp*60, 6, 9); ctx.fillStyle = '#6bb8f0'; ctx.fill();
   }
+  };
+  const pastRow2 = t >= B.arrive - 0.35 || (t > B.walk && ease(s2Tw(t, B.walk, B.arrive - 0.35)) > 0.55);
+  s2FrontRow();
+  if (pastRow2) { drawN(); s2BackChairs(); } else { s2BackChairs(); drawN(); }
   // Jed: watches him go, then back to his game
   const jo = {mouth: t > B.notice && t < B.give + 0.4 ? 'o' : 'smile', look: [0.1, 1]};
   if (t < B.give + 0.4) jo.look = [-1, 0.2];
   else if (t > B.up && t < B.arrive + 0.6) jo.look = [clamp((x - S.jx)/150, -1, 1), -0.4];
   person(S.jx, S.jy, S.js, CAST.jed, jo);
   s2BackDesk();
-  // the phone: in Nailong's hands, back to Jed, under the desk
-  const pJ = [S.jx, S.jy - 83*S.js + 6], pN = [S.nx + 40, H*0.84], kg = ease(s2Tw(t, B.give, B.give + 0.4));
-  s2Phone(lerp(pN[0], pJ[0], kg), lerp(pN[1], pJ[1], kg) - Math.sin(Math.PI*kg)*30, 50/470, -0.06*(1 - kg), s2RowsB(t), false);
+  // the MacBook: in front of Nailong, slid back to Jed
+  const MS = s2MacSpots(S), pJ = MS.pJ, pN = MS.pN, kg = ease(s2Tw(t, B.give, B.give + 0.4));
+  s2Phone(lerp(pN[0], pJ[0], kg), pN[1] - Math.sin(Math.PI*kg)*8, MS.sc, 0, s2RowsB(t), false);
   fxMark('bang', S.nx + 55*S.ns, S.ny - 200*S.ns, s2Tw(t, B.bang, B.bang + 0.6));   // anime "!" when she calls him (Nichijou)
 
   // ---- speech ----
   // her lines once the question is up, and his "got it", sit BESIDE the face (above it they covered 乒乓球 and the green answer)
   const lTop = S.ly - 268*S.ls, nTop = y - 188*s*sy, lFace = [S.lx, S.ly - 218*S.ls, 44*S.ls - 6], nFace = [x, y - 130*s*sy, 45*s*sx];
   if (t > B.move && t < B.moveEnd) bubble(L.move, S.lx, lTop, 30, 330);
-  if (t > B.ping && t < B.pingEnd) bubble(L.ping, x + 30, nTop, 28, 250);
+  if (t > B.ping && t < B.pingEnd) s2SideBubble(L.ping, nFace[0], nFace[1], nFace[2], -1, t - B.ping, 28, 260);   // left of him: her face stays clear
   if (t > B.what && t < B.whatEnd) bubble(L.what, S.lx, lTop, 32, 300);
   if (t > B.no && t < B.noEnd) bubble(L.no, S.lx, lTop - 6, Math.round(64*(1 + 0.25*s2Pulse(t, B.no, B.no + 0.3))), 300);   // big and loud
   if (t > B.first && t < B.firstEnd) s2SideBubble(L.first, lFace[0], lFace[1] - 14, lFace[2], -1, t - B.first, 26, 360);

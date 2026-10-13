@@ -373,7 +373,9 @@ function chAtrium(t){
   ctx.restore();
 }
 
-// ---------- the inside of the round slide, looking back up it at the light from the atrium ----------
+// ---------- the inside of the round slide, looking on down it at the light at the bottom ----------
+// (Max, 13 Oct: "it looks like nailong changes direction and goes back up the slide": the rings used to drift away from the camera;
+// now they rush towards it, so the ride reads as going on down the slide. A falling flow means forwards.)
 // Rings of red fibreglass from the camera out to the entrance, each cut into 8 panels on the lines where the octagon's corners will be.
 // o = {cx, cy, R (a ring's radius at depth 1), flow (rings drift away as he slides), bx, by (where the far end has swung to),
 //      wob(i, z) => [dx, dy] (the shake, ring i), crack 0..1 (dark seams, the panels pull apart), peel(i, j) => seconds since panel j of ring i came loose}
@@ -426,12 +428,12 @@ const chRideU = t => t - CH.cut;
 const chBendRamp = t => stSeg(t, CH.cut + 0.2, CH.cut + 1.0);
 const chBend = t => { const u = chRideU(t), k = chBendRamp(t); return [W*0.22*Math.sin(u*1.9 + 0.2)*k, (-H*0.09 + H*0.07*Math.sin(u*1.3))*k]; };
 function chRide(t){
-  const b = chBend(t), o = {cx: W/2, cy: H*0.36, R: H*0.78, flow: 2.6*chRideU(t), bx: b[0], by: b[1]};
+  const b = chBend(t), o = {cx: W/2, cy: H*0.36, R: H*0.78, flow: -2.6*chRideU(t), bx: b[0], by: b[1]};
   ctx.fillStyle = '#2b0409'; ctx.fillRect(0, 0, W, H);
   ctx.save(); const shk = Math.sin(t*53)*1.4; ctx.translate(shk, Math.cos(t*61)*shk*0.6);
   chTubeIn(o);
-  ctx.strokeStyle = 'rgba(255,220,220,.35)'; ctx.lineCap = 'round';                 // speed streaks running away up the tube
-  for (let i = 0; i < 10; i++) { const a = stRnd(i)*Math.PI*2, k = (t*1.6 + stRnd(i + 20)) % 1, r1 = o.R*1.2*(1 - k), r0 = r1*0.75; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(o.cx + Math.cos(a)*r0 + b[0]*k*0.3, o.cy + Math.sin(a)*r0 + b[1]*k*0.3); ctx.lineTo(o.cx + Math.cos(a)*r1, o.cy + Math.sin(a)*r1); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(255,220,220,.35)'; ctx.lineCap = 'round';                 // speed streaks rushing past the camera
+  for (let i = 0; i < 10; i++) { const a = stRnd(i)*Math.PI*2, k = (t*1.6 + stRnd(i + 20)) % 1, r1 = o.R*1.2*k, r0 = r1*0.75; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(o.cx + Math.cos(a)*r0 + b[0]*k*0.3, o.cy + Math.sin(a)*r0 + b[1]*k*0.3); ctx.lineTo(o.cx + Math.cos(a)*r1, o.cy + Math.sin(a)*r1); ctx.stroke(); }
   ctx.lineCap = 'butt';
   // Nailong rides up the walls round the bends, the other way from the far end
   const u = chRideU(t), zN = 2.2, th = -0.6*Math.sin(u*1.9 - 0.2)*chBendRamp(t), g = chBendG(zN), rN = o.R/zN, s = 0.62;
@@ -514,7 +516,7 @@ const CH_FLOW0 = 2.6*(CH.out - CH.cut) + 0.4;
 function chOcta(t){ if (typeof ogPreview === 'function') ogPreview(t); else stOctaWorld(t, 8, true); }
 function chCollapse(t){
   const e = chCamE(t), ogR = chOgR(), cx = W/2, cy = lerp(H*0.36, H*0.42, e), R = lerp(H*0.78, ogR, e);
-  const flow = CH_FLOW0 + 0.9*(1 - Math.pow(1 - stSeg(t, CH.in2, CH.crack), 2));      // he slows to a stop as the wobble hits
+  const flow = CH_FLOW0 - 0.9*(1 - Math.pow(1 - stSeg(t, CH.in2, CH.crack), 2));      // he slows to a stop as the wobble hits
   const wobA = i => { const k = t - (CH.in2 + 0.03*i); return k < 0 ? 0 : Math.min(1, k/0.1)*(1 - stSeg(t, CH.peel, CH.peel + 0.4)); };
   const wob = (i, z) => { const a = wobA(i)*44/Math.sqrt(z); return [a*Math.sin(t*30 - i*0.7), a*0.7*Math.cos(t*33 - i*0.7)]; };
   ctx.save(); stShake(t, [[CH.in2, 9], [CH.crack, 6]]);
@@ -552,14 +554,40 @@ function chCollapse(t){
   if (t > CH.hang - 0.05 && t < CH.drop + 0.2) fxMark('sweat', x + 52*s, y - 180*s, stSeg(t, CH.hang - 0.05, CH.drop + 0.2), s*1.4);
 }
 
+// Max, 13 Oct: "nailong has to be running left along those scenes that you've got, going left not right, you got it reversed."
+// So every outside part (the run, the atrium and stairs, Mr Shou shaking the slide) is drawn mirrored: they enter on the right, run
+// left, the scenery scrolls the other way, he arrives at the stairs from the right. Text is NOT mirrored: while the mirror is on, every
+// fillText / strokeText is flipped back about its own anchor (and left/right alignment swapped), so the signs, TR1 to TR3, the Hub,
+// EXIT, SWISH!, NAILONG! and RATTLE RATTLE all still read the right way round, in the mirrored spot. The ride inside the tube and the
+// collapse onto the octagon are left as they were (the octagon has to match the game's own first frame).
+const CH_FLIPALIGN = {left: 'right', right: 'left', start: 'end', end: 'start'};
+function chMirror(fn){
+  const own = k => Object.prototype.hasOwnProperty.call(ctx, k), keep = {fillText: own('fillText') ? ctx.fillText : null, strokeText: own('strokeText') ? ctx.strokeText : null};
+  const flip = orig => function(s, x, y, ...r){
+    ctx.save(); ctx.translate(x, y); ctx.scale(-1, 1); const a = ctx.textAlign; ctx.textAlign = CH_FLIPALIGN[a] || a;
+    orig.call(ctx, s, 0, 0, ...r); ctx.restore();
+  };
+  const f0 = ctx.fillText, s0 = ctx.strokeText;
+  ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1);
+  ctx.fillText = flip(f0); ctx.strokeText = flip(s0);
+  try { fn(); }
+  finally {
+    for (const k of ['fillText', 'strokeText']) { if (keep[k]) ctx[k] = keep[k]; else delete ctx[k]; }
+    ctx.restore();
+  }
+}
 function sceneChase(t){
   stCues('chase', t, CHASE_SFX);
-  if (t < CH.seg[3]) chRun(t);
-  else if (t < CH.cut) chAtrium(t);
-  else if (t < CH.out) chRide(t);
-  else if (t < CH.in2) chShake(t);
-  else chCollapse(t);
-  chWhipFx(t);
+  const outside = t < CH.cut || (t >= CH.out && t < CH.in2);
+  const draw = () => {
+    if (t < CH.seg[3]) chRun(t);
+    else if (t < CH.cut) chAtrium(t);
+    else if (t < CH.out) chRide(t);
+    else if (t < CH.in2) chShake(t);
+    else chCollapse(t);
+    chWhipFx(t);
+  };
+  if (outside) chMirror(draw); else draw();
   if (t > CH.cut - 0.15 && t < CH.cut + 0.3) {             // the red flash whips the camera inside the tube
     const a = t < CH.cut ? stSeg(t, CH.cut - 0.15, CH.cut) : 1 - stSeg(t, CH.cut, CH.cut + 0.3);
     ctx.fillStyle = `rgba(224,40,50,${a})`; ctx.fillRect(0, 0, W, H);

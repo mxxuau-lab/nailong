@@ -302,6 +302,7 @@ function person(x, y, s, p, o = {}){
   ctx.fillStyle = 'rgba(240,120,120,.3)'; ell(-21, -205, 6, 4); ctx.fill(); ell(21, -205, 6, 4); ctx.fill();
   if (mouth === 'o') { ell(0, -196, 5, 6.5); ctx.fillStyle = '#5a1a22'; ctx.fill(); ctx.lineWidth = 2.5; ctx.stroke(); }
   else { ctx.beginPath(); ctx.moveTo(-14, -202); ctx.quadraticCurveTo(0, -184, 14, -202); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.stroke(); }
+  if (window.tagSeen && p.name) window.tagSeen(p.name, 0, -270);   // main.js name tags: where the top of this head is
   ctx.restore();
 }
 

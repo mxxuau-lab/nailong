@@ -17,13 +17,10 @@ const LINES_OCTAGON = {
   turn: 'turn',                             // under the ← → keys on the instruction card
   flip: 'flip',                             // under the ↑ key, on the card and beside the first flip
   red: 'stay on the red',
-  books: 'a book on the path only slows you down',   // the bonk is harmless: no fall, no life (so she never flips over one into the void)
+  books: 'dodge the books: a bonk slows you down',   // every book can be stepped round (Max, 13 Oct); a bonk costs time, never a fall or a life
   start: 'press any key to start',
   again: 'Again.',                          // short beat after a fall
   fails: ['Nailong fell. Again.', 'Whoops. Again.', 'Wheee. No. Again.', 'Almost. Again.', 'Gravity, rude. Again.'],
-  m: 'm',                                   // metres run, beside the percentage: "41.23%  84 m"
-  last: 'last',                             // "last 72 m    best 84 m" under them after a fall
-  best: 'best',
   bonk: 'BONK!',                            // when he runs into a textbook lying on the path
   win: '100%!',
   winBubble: 'I did it!',
@@ -63,9 +60,9 @@ function ogTrack(){
   const G = (c, w = [0], kind = 0) => rowsOf(c, w.map(o => p + o), kind);
   const T = (d, c, w = [0], kind = 0) => { const a = n(); rowsOf(c, [...w.map(o => p + o), ...w.map(o => p + d + o)], kind); moves.push({a, b: n(), d, flip: d === 4, to: ogM8(p + d)}); p += d; };
   const F = c => T(4, c);
-  const mv = (d, a, b) => { moves.push({a, b, d, flip: false, to: ogM8(p + d)}); p += d; };
+  const mv = (d, a, b, teach) => { moves.push({a, b, d, flip: false, to: ogM8(p + d), teach: !!teach}); p += d; };
   const S = (v, snap) => spd.push({row: n(), v, snap: !!snap});
-  const B = (w = 'y') => bonks.push({row: n(), face: ogM8(p), hit: -1, w});
+  const BK = (row, face, w = 'y') => bonks.push({row, face: ogM8(face), hit: -1, w});   // a textbook lying on face `face` of a row
   const X = (row, face, o = {}) => throws.push({row, face: ogM8(face), len: o.len || 1, show: o.show || OG_SHOW, hit: o.hit || OG_HIT, w: o.w || (throws.length % 2 ? 'r' : 'y')});
   const MISS = () => throws.push({row: n() + 6, face: null, len: 1, show: OG_SHOW, hit: OG_HIT, w: throws.length % 2 ? 'r' : 'y', ang: -Math.PI/2 + (ogRnd(n()) - 0.5)*1.6});
   const SIDE = side => sides.push({row: n(), side});
@@ -74,7 +71,11 @@ function ogTrack(){
   // 1. warm-up, no Mr Shou yet: whole tube, a chute, three slow turns, the first flip, a book left lying on the path
   S(3.2); R(6); G(2, [-1, 0, 1]); G(3);
   T(1, 3); G(4); T(-1, 3); G(4); T(-1, 3); G(3);
-  F(5); G(3); B(); G(4);
+  F(5); G(3);
+  //    the first book (Max, 13 Oct: "all the textbooks have to be dodgeable"): it lies on the path just before the path steps left,
+  //    so she steps round it and keeps going; a key beside Nailong shows how
+  { const c = p, a = n(); rowsOf(5, [c, c + 1]); BK(a + 3, c); mv(1, a, a + 3, true); }
+  G(4);
   // 2. Mr Shou bursts in on the right: two books punch the sides of a three-wide chute, then he aims at the middle (step right),
   //    then at the right (step back)
   S(3.5); SIDE(1); SAY(LINES_OCTAGON.shout); G(5);
@@ -82,14 +83,21 @@ function ogTrack(){
     X(a + 4, c + 1); X(a + 7, c - 1);
     X(a + 11, c, {len: 2}); X(a + 11, c + 1, {len: 2}); mv(-1, a + 8, a + 11);
     X(a + 15, c - 1, {len: 2}); mv(1, a + 13, a + 15); }
-  G(3); B('r'); G(4); SIDE(-1); G(3);
+  //    then a slalom: a book in the middle, then two side by side, so she weaves out, over, and back to the middle
+  G(3);
+  { const c = p, a = n(); rowsOf(10, [c - 1, c, c + 1]); BK(a + 3, c, 'r'); BK(a + 7, c - 1); BK(a + 7, c, 'r');
+    mv(1, a, a + 3); mv(-1, a + 8, a + 10); }
+  G(2); SIDE(-1); G(3);
   // 3. the barrel roll: the path corkscrews all the way round to the left, a face every three rows
   S(3.8); MISS();
   for (let i = 0; i < 8; i++) { T(1, 2); G(1); if (i === 4) MISS(); }
   G(3);
   // 4. (the textbook stepping stones, a zigzag paved with Methods books, are cut: Max, 13 Oct, "cut that section where mr shou makes
   //    a bridge out of the books". The book panels, kinds 2 and 3, are still drawn by ogPanel if a pattern ever uses them.)
-  S(3.9); G(3); B(); G(3); SIDE(1); G(2);
+  //    a book at each end of a step left: too early hits the first, too late hits the second, so she steps just between them
+  S(3.9); G(3);
+  { const c = p, a = n(); rowsOf(5, [c, c + 1]); BK(a, c + 1, 'r'); BK(a + 3, c); mv(1, a + 1, a + 3); }
+  G(3); SIDE(1); G(2);
   // 5. the flip ladder: floor, ceiling, floor, ceiling, quicker each time
   S(4.1); MISS();
   F(3); G(2); F(3); G(2); MISS(); F(3); G(1); F(3); G(3);
@@ -110,7 +118,11 @@ function ogTrack(){
     X(b + 6, c - 1, {len: 2}); X(b + 6, c - 2, {len: 2}); mv(1, b + 4, b + 6);
     const d = n(); rowsOf(6, [c - 1, c, c + 1]);
     X(d + 2, c, {len: 2}); X(d + 2, c - 1, {len: 2}); mv(1, d, d + 2); }
-  G(3); B(); G(3);
+  //    then a wall of two books, then two more either side of the middle: out to the right, then thread back between them
+  G(3);
+  { const c = p, a = n(); rowsOf(10, [c - 1, c, c + 1]); BK(a + 3, c); BK(a + 3, c + 1, 'r'); BK(a + 7, c - 1, 'r'); BK(a + 7, c + 1);
+    mv(-1, a, a + 3); mv(1, a + 4, a + 7); }
+  G(3);
   // 8. the speed ramp: yellow chevrons (and Mr Shou catches up), then quick stairs at the new speed
   S(5.1, true); SIDE(0); SAY(LINES_OCTAGON.cooked, true); G(4, [0], 4);
   T(1, 2); G(1); T(1, 2); G(1); T(-1, 2); G(1); T(-1, 2); G(2);
@@ -130,10 +142,11 @@ function ogReset(again = false){
     fc: 0, ang: 0, run: 0, dist: 0, intro: OG.replay ? 0 : again ? 0.6 : OG_CARD, introT: 0, dead: -1, died: false, again,   // a replay from the menu skips the card and the 'Again.'
     flip: -1, flipA0: 0, flipA1: 0, flipDir: 1, buf: 0, land: 0, lastTurn: 1, bonkT: -1, bonkSide: 1, bonkW: 'y',
     fin: -1, sent: false, botI: 0, lean: 0, leanT: 0, shake: 0, stop: 0, fx: [], fall: [], ramp: -1, rampSeen: false, cue: false,
-    deaths, lastM: OG.lastM || 0, bestM: OG.bestM || 0, failLine: LINES_OCTAGON.fails[deaths % LINES_OCTAGON.fails.length]});
+    deaths, lastM: OG.lastM || 0, bestM: OG.bestM || 0, clk: OG.clk || 0, failLine: LINES_OCTAGON.fails[deaths % LINES_OCTAGON.fails.length]});
 }
 const ogMul = () => OG.bonkT >= 0 ? 0.35 + 0.65*clamp((OG.bonkT - 0.15)/0.85, 0, 1) : 1;   // a bonk drops him to a third of the speed for a moment
 const ogVe = () => OG.v*ogMul();
+const ogTime = s => typeof menuFmt === 'function' ? menuFmt(s) : s.toFixed(1) + 's';   // the same "41.2s" / "1:04.3" the end menu shows
 const ogMetres = () => Math.round(clamp(OG.dist, 0, OG.finPos - OG_PZ)*OG_M);
 const ogPP = () => OG.dist + OG_PZ;
 // is there tube under the player at track position pp on face f? A tenth of a unit of grace either side of a row edge.
@@ -474,6 +487,9 @@ function ogFlip(){
 // a point on screen for a face, as the world is drawn this frame (for the effects that start where a book lands)
 const ogScr = (face, u, z) => ogGeo(OG.ang, ogPP(), ogR0()).P(face, u, z);
 function ogStep(dt){
+  // the score is a time (Max, 13 Oct: "this way we can do a timer"): it runs from the first start to the finish ring, through falls
+  // and retries and every bonk (a bonk slows him, so it costs time), but not while the instruction card is up
+  if (OG.fin < 0 && !(OG.intro > 0 && !OG.again)) OG.clk += dt;
   if (OG.stop > 0) { OG.stop -= dt; dt = 0; }   // hit-stop: the whole field holds still for a few frames on a fall or a slam
   if (OG.shake > 0) OG.shake -= dt;
   if (OG.intro > 0) { OG.intro -= dt; OG.introT += dt; if (window.AUTO && !OG.again && OG.introT > 1) OG.intro = 0; }
@@ -504,8 +520,9 @@ function ogStep(dt){
     OG.fin += dt;
     if (OG.fin > 1.0 && !OG.sent) {
       OG.sent = true; OG.bestM = Math.max(OG.bestM, ogMetres());
-      (window.OGLOG = window.OGLOG || []).push({run: +OG.run.toFixed(1), deaths: OG.deaths, metres: OG.bestM, bonks: OG.bonks.filter(b => b.hit >= 0 && b.hit < 99).length});
-      GAMES.octagon.api.done(OG.bestM);   // score: the furthest he got in one life, in metres (the whole level once he finishes). The win jingle comes from main.js
+      const secs = Math.round(OG.clk*10)/10;
+      (window.OGLOG = window.OGLOG || []).push({time: secs, run: +OG.run.toFixed(1), deaths: OG.deaths, metres: OG.bestM, bonks: OG.bonks.filter(b => b.hit >= 0 && b.hit < 99).length});
+      GAMES.octagon.api.done(secs);   // score: her time in seconds, lower is better (menu.js MENU_OWN_TIME). The win jingle comes from main.js
     }
     return;
   }
@@ -654,15 +671,14 @@ function ogPaint(t){
   if (sh && sh.behind) ogShou(t, S, sh);   // right behind: in front of everything, in the corner
   ogShouts(t, S, sh);
   ctx.restore();   // end of the shake layer
-  // HUD: the percentage top left with two decimals and the metres beside it, like the real game; last / best once she has fallen
+  // HUD: the percentage top left with two decimals, like the real game, and the running time beside it (the menu's format)
   const pct = clamp(OG.dist/(OG.finPos - OG_PZ), 0, 1), pctTxt = (pct*100).toFixed(2) + '%';
   const hud = (txt, x, y) => { ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(255,246,243,.9)'; ctx.lineWidth = 5; ctx.strokeText(txt, x, y); ctx.fillText(txt, x, y); };
   font(30, 500); ctx.fillStyle = 'rgba(74,47,12,.75)'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  hud(pctTxt, 22, 18); hud(`${ogMetres()} ${LINES_OCTAGON.m}`, 22 + ctx.measureText(pctTxt).width + 26, 18);
-  if (OG.deaths) { font(16, 600); ctx.fillStyle = 'rgba(74,47,12,.6)'; hud(`${LINES_OCTAGON.last} ${OG.lastM} ${LINES_OCTAGON.m}    ${LINES_OCTAGON.best} ${OG.bestM} ${LINES_OCTAGON.m}`, 24, 54); }
-  // teaching: a keycap beside Nailong over the first two turns and the first flip while each one comes up
+  hud(pctTxt, 22, 18); hud(ogTime(OG.clk), 22 + ctx.measureText(pctTxt).width + 26, 18);
+  // teaching: a keycap beside Nailong over the first two turns, the first flip and the first book while each one comes up
   if (playing && talk) {
-    const m = OG.moves.find((mv, i) => (i < 2 || (mv.flip && !OG.moves.slice(0, i).some(o => o.flip))) && mv.a*OG_LEN - pp < 9 && pp < mv.b*OG_LEN && ogM8(OG.fc) !== mv.to && OG.flip < 0);
+    const m = OG.moves.find((mv, i) => (i < 2 || mv.teach || (mv.flip && !OG.moves.slice(0, i).some(o => o.flip))) && mv.a*OG_LEN - pp < 9 && pp < mv.b*OG_LEN && ogM8(OG.fc) !== mv.to && OG.flip < 0);
     if (m) {
       const x = cx + (m.flip ? 190 : -m.d*190), y = fy - 70 + Math.sin(t*10)*4;   // beside Nailong, on the side the path goes
       ogKey(x, y, 1.15, m.flip ? 'U' : m.d > 0 ? 'L' : 'R');
@@ -679,7 +695,7 @@ GAMES.octagon = {
   title: LINES_OCTAGON.title,
   hint: LINES_OCTAGON.hint,
   enter(api){   // one level: any ?level= plays it. api.replay (from the end menu) skips the card and every line of dialogue
-    this.api = api; OG.replay = !!(api && api.replay); OG.deaths = 0; OG.lastM = 0; OG.bestM = 0; ogReset(false);
+    this.api = api; OG.replay = !!(api && api.replay); OG.deaths = 0; OG.lastM = 0; OG.bestM = 0; OG.clk = 0; ogReset(false);
   },
   draw(t, dt){ ogStep(dt); ogPaint(t); },
   cardUp(){ return OG.intro > 0 && !OG.again; },   // main.js: the subtitle waits for the card to go

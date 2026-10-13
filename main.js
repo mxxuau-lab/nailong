@@ -7,7 +7,15 @@ const LINES_MAIN = {
   pay: 'pay $10 for 3 more lives',
   exit: 'exit the game',
   bruh: 'bruh, you really did that?',
-  nope: "No, I wouldn't actually do that to you.",   // Max's line (13 Oct): the joke explained; she carries on, no hearts back
+  nope: "No, I wouldn't actually do that to you.",   // Max's line (13 Oct): after pay $10 and bruh; she carries on, no hearts back
+  // exit the game (Max, 13 Oct 10:50): "it goes black for a while, and then my face appears in the corner, just the face and says
+  // "I wouldn't actually do that to you" skip the bruh, pause.. "keep going""
+  faceNope: "I wouldn't actually do that to you.",
+  faceGo: 'Keep going.',
+  // name tags (Max, 13 Oct 10:50): "I need labels showing that it's scarlett, so when there's a character after .3s a line with a
+  // nametag appears for one second before fading". Once per ride, the first story clip each one is on screen in. Max is not
+  // tagged (he introduces himself). Keys are the names the drawing code uses; the values are what she reads.
+  tags: {Scarlett: 'Scarlett', Jedidiah: 'Jed', 'Mr Shou': 'Mr Shou', 'Liu Lao Shi': 'Liu Lao Shi'},
   choose: 'arrows to choose, Enter to pick',
   // a movie-style subtitle that flashes up during a game in the ride (Max, 12 Oct), about 2 s after its instruction card goes.
   // Max fills the empty ones; an empty one shows nothing. Never in replays from the menu.
@@ -105,7 +113,7 @@ window.RIDE = {failed: false, lives: LIVES_START, deaths: 0, overs: 0};   // fai
 if (q.get("failed") === "1") RIDE.failed = true;   // test hook: the menu as it looks after she ran out of lives
 let cuts = [];          // hearts being cut: {i, t}
 let pops = [];          // hearts popping back in: {i, t}
-let over = null;        // the out-of-lives overlay: {t, phase: 'wall'|'pay'|'bruh'|'lift', sel, at, ft, pick, bt}
+let over = null;        // the out-of-lives overlay: {t, phase: 'wall'|'pay'|'bruh'|'face'|'lift', sel, at, ft, pick, bt}
 const livesOn = () => !replay && !!cur() && !!cur().game && (steps === FLOW || q.has('lives'));
 function loseLife(){
   if (over || RIDE.lives <= 0) return;
@@ -218,6 +226,15 @@ const OVER_WAIT = 2.05;      // from the death to the shutter starting (the hear
 const SH_FALL = 1.2;         // the shutter's fall
 const OVER_TITLE = 1.7, OVER_BTN = 2.5, OVER_PICK = 2.9;   // on the shutter's clock: the title, the buttons fading in, picks allowed
 const BRUH_AT = 0.8, NOPE_AT = 3.6, NOPE_END = 6.8;        // on the pick's clock: "bruh...", "No, I wouldn't...", the shutter lifts
+// exit the game: black from 0.3 s, Max's face rises into the corner at 2.4 s, his line at 2.9 s, a pause, "Keep going." at 6.9 s, lift at 8.6 s
+const FACE_UP = 2.4, FACE_SAY = 2.9, FACE_SAY_END = 5.9, FACE_GO = 6.9, FACE_END = 8.6;
+// Max's head alone (person() clipped just under the chin), centre (x, y), talking flips the mouth
+function maxFace(x, y, s, talking, B){
+  const p = CAST.max, k = s*p.h;
+  ctx.save(); ell(x, y - 4*k, 56*k, 50*k); ctx.clip();
+  person(x, y + 218*k, s, p, {mouth: talking && Math.floor(B*7) % 2 ? 'o' : 'smile', look: [0.5, -0.1]});
+  ctx.restore();
+}
 function overButtons(){
   const bw = Math.min(W*0.36, 500), bh = 170, gap = 56, y = H*0.45;
   return [{x: W/2 - gap/2 - bw, y, w: bw, h: bh}, {x: W/2 + gap/2, y, w: bw, h: bh}];
@@ -276,19 +293,38 @@ function drawOver(dt){
   }
   const bs = overButtons();
   if (o.phase === 'wall' && T >= SH_FALL + 0.3) o.phase = 'pay';
-  if (o.phase === 'pay' || (o.phase === 'bruh' && o.bt < 0.6)) {
-    const fade = o.phase === 'bruh' ? clamp(1 - (o.bt - 0.25)/0.3, 0, 1) : 1;
+  if (o.phase === 'pay' || ((o.phase === 'bruh' || o.phase === 'face') && o.bt < 0.6)) {
+    const fade = o.phase !== 'pay' ? clamp(1 - (o.bt - 0.25)/0.3, 0, 1) : 1;
     ctx.save(); ctx.globalAlpha = fade;
     const tk = fxBack(clamp((T - OVER_TITLE)/0.4, 0, 1));
     if (tk > 0.01) { ctx.save(); ctx.translate(W/2, H*0.24); ctx.scale(tk, tk); title(LINES_MAIN.overTitle, 0, 0, Math.min(92, W/13), '#e8423b'); ctx.restore(); }
     const minis = y0 => { for (let i = 0; i < 3; i++) drawHeart((i - 1)*38, y0, 13); };
     overBtn(bs[0], LINES_MAIN.pay, C.y, clamp((T - OVER_BTN)/0.5, 0, 1), o.sel === 0, o.pick === 0 && o.phase === 'bruh', minis, true);
-    overBtn(bs[1], LINES_MAIN.exit, '#e9e3d2', clamp((T - OVER_BTN - 0.2)/0.5, 0, 1), o.sel === 1, o.pick === 1 && o.phase === 'bruh', null, true);
+    overBtn(bs[1], LINES_MAIN.exit, '#e9e3d2', clamp((T - OVER_BTN - 0.2)/0.5, 0, 1), o.sel === 1, o.pick === 1 && o.phase === 'face', null, true);
     if (o.phase === 'pay' && T > OVER_PICK + 0.3) { font(24, 600); ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINES_MAIN.choose, W/2, H*0.84); }
     ctx.restore();
   }
-  if (o.phase === 'bruh' || o.phase === 'lift') {
-    o.bt += dt;
+  if (o.phase === 'bruh' || o.phase === 'face' || o.phase === 'lift') o.bt += dt;
+  if (o.pick === 1 && (o.phase === 'face' || o.phase === 'lift')) {   // exit the game: black, Max's face in the corner, his two lines
+    const B = o.bt, lift = o.phase === 'lift';
+    const black = lift ? 1 - clamp(B/0.6, 0, 1) : clamp((B - 0.3)/0.6, 0, 1);
+    if (black > 0) { ctx.fillStyle = `rgba(0,0,0,${black})`; ctx.fillRect(0, 0, W, H); }
+    const up = lift ? 1 - ease(clamp(B/0.4, 0, 1)) : fxBack(clamp((B - FACE_UP)/0.45, 0, 1));
+    const fs = 1.25, fx = Math.max(130, W*0.1), fy = H - 125 + (1 - up)*300;
+    if (up > 0.001) {
+      const say = !lift && B > FACE_SAY && B < FACE_SAY_END, go = !lift && B > FACE_GO && B < FACE_END - 0.3;
+      maxFace(fx, fy, fs, (say && B < FACE_SAY + 1.6) || (go && B < FACE_GO + 0.6), B);
+      if (say && !o.nopeSaid) { o.nopeSaid = true; window.SFX && SFX.play('pop', {p: 1.1}); }
+      if (go && !o.goSaid) { o.goSaid = true; window.SFX && SFX.play('pop', {p: 1.3}); }
+      if (say || go) {
+        const keep = CLOCK; CLOCK = 1e6 + B - (go ? FACE_GO : FACE_SAY);   // bubble() pops on CLOCK; the frozen game clock would hold it at size 0
+        ctx.save(); bubble(go ? LINES_MAIN.faceGo : LINES_MAIN.faceNope, fx + 120, fy - 70, 44, Math.min(620, W*0.5)); ctx.restore();
+        CLOCK = keep;
+      }
+    }
+    if (o.phase === 'face' && B > FACE_END) { o.phase = 'lift'; o.bt = 0; }
+  }
+  if (o.pick !== 1 && (o.phase === 'bruh' || o.phase === 'lift')) {
     const B = o.bt, rise = o.phase === 'lift' ? 1 : ease(clamp((B - 0.35)/0.6, 0, 1)), down = o.phase === 'lift' ? ease(clamp(B/0.5, 0, 1)) : 0;
     const nx = W*0.24, ny = H + 330 - rise*340 + down*360;
     if (ny < H + 320) {
@@ -310,7 +346,7 @@ function drawOver(dt){
 function overPick(i){
   const o = over;
   if (o.phase === 'pay' && o.t > OVER_PICK) {
-    o.pick = i; o.sel = 0; o.phase = 'bruh'; o.bt = 0; window.SFX && SFX.play('thud', {p: 0.8});
+    o.pick = i; o.sel = 0; o.phase = i === 1 ? 'face' : 'bruh'; o.bt = 0; window.SFX && SFX.play('thud', {p: 0.8});
     if (i === 0) noteFell();   // she tried to pay: the menu's fake checkout pokes her for falling for it twice
   }
 }
@@ -451,11 +487,60 @@ function next(){ go(cur().end ? 0 : si + 1); }
 const SCENE_SPEED = 0.7;
 const isClip = () => !curGame() && !!cur().scene;
 function draw(t, dt){
+  const real = t;
   if (isClip()) { t *= SCENE_SPEED; dt *= SCENE_SPEED; }
   const g = curGame();
   if (over && g && !replay) { CLOCK = over.ft; g.draw(over.ft, 0); return; }   // out of lives: the game is frozen under the shutter
   CLOCK = t;                                   // core.js step clock for the juice helpers (frozen by HOLD)
+  TAGS.on = isClip(); TAGS.frame = {};
   if (g) g.draw(t, dt); else if (cur().lives) drawLivesCard(t); else if (cur().scene) cur().scene(t, dt);
+  if (TAGS.on) drawTags(real);
+  TAGS.on = false;
+}
+
+// ---------- name tags: a line up from a character's head to a label with their name ----------
+// person() (core.js) and the two teachers report where their head is as they are drawn (tagSeen); the first time a tagged
+// character is on screen in a story clip, its tag pops in 0.3 s later, holds 1 s and fades. Once per ride (per page load).
+const TAGS = {on: false, frame: {}, first: {}, last: {}};
+const TAG_IN = 0.3, TAG_HOLD = 1.0, TAG_FADE = 0.4;
+function tagSeen(name, lx, ly){
+  if (!TAGS.on || !LINES_MAIN.tags[name]) return;
+  const m = ctx.getTransform(), px = (m.a*lx + m.c*ly + m.e)/S, py = (m.b*lx + m.d*ly + m.f)/S;
+  if (px > 20 && px < W - 20 && py > -40 && py < H - 60) TAGS.frame[name] = [px, py];
+}
+window.tagSeen = tagSeen;
+for (const [fn, name] of [['shou', 'Mr Shou'], ['liuLaoShi', 'Liu Lao Shi']]) {   // the teachers have their own draw functions: feet at (x, y), about 272*s tall
+  const raw = window[fn];
+  if (typeof raw === 'function') window[fn] = function(x, y, s, ...r){ const out = raw.call(this, x, y, s, ...r); tagSeen(name, x, y - 280*(s || 1)); return out; };
+}
+if (typeof window.storyPerson === 'function') {   // story.js draws Scarlett in the cafe with its own posable person (feet at (x, y), 272*s*p.h tall)
+  const raw = window.storyPerson;
+  window.storyPerson = function(x, y, s, p, ...r){ const out = raw.call(this, x, y, s, p, ...r); if (p && p.name) tagSeen(p.name, x, y - 275*(s || 1)*(p.h || 1)); return out; };
+}
+function drawTags(t){
+  for (const n in TAGS.frame) { if (!(n in TAGS.first)) TAGS.first[n] = {t, step: goN}; TAGS.last[n] = TAGS.frame[n]; }
+  ctx.save(); ctx.setTransform(S, 0, 0, S, 0, 0);
+  for (const n in TAGS.first) {
+    const f = TAGS.first[n]; if (f.step !== goN) continue;
+    const u = t - f.t - TAG_IN; if (u < 0 || u > TAG_HOLD + TAG_FADE) continue;
+    if (!f.popped) { f.popped = true; window.SFX && SFX.play('tick', {p: 1.6, g: 0.5}); }
+    const a = u > TAG_HOLD ? 1 - (u - TAG_HOLD)/TAG_FADE : 1, grow = ease(clamp(u/0.18, 0, 1));
+    const [hx, hy] = TAGS.last[n], text = LINES_MAIN.tags[n];
+    font(26, 700); const tw = ctx.measureText(text).width + 30, th = 40;
+    const side = hx + 60 + tw > W - 10 ? -1 : 1, ex = hx + side*48*grow, ey = Math.max(th/2 + 8, hy - 62*grow);
+    ctx.globalAlpha = a; ctx.lineCap = 'round';
+    ctx.strokeStyle = C.line; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(hx, hy - 6); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(hx, hy - 6); ctx.lineTo(ex, ey); ctx.stroke();
+    ell(hx, hy - 6, 6, 6); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.line; ctx.stroke();
+    if (grow > 0.5) {
+      const bx = side > 0 ? ex - 4 : ex - tw + 4, sc = fxBack(clamp((u - 0.08)/0.2, 0, 1));
+      ctx.save(); ctx.translate(ex, ey); ctx.scale(sc, sc); ctx.translate(-ex, -ey);
+      rr(bx, ey - th/2, tw, th, 14); ctx.fillStyle = '#FFD21F'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.stroke();
+      ctx.fillStyle = C.line; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, bx + tw/2, ey + 1);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
 }
 function frame(now){
   const dt = HOLD ? 0 : clamp((now - last)/1000, 0, 0.05); last = now;   // never negative: the first rAF timestamp can precede last

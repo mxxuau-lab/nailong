@@ -144,14 +144,20 @@ function liuLaoShi(x, y, s, o = {}) {
 // ====================================================================================
 const PP_TL = 2.74, PP_HW = 0.7625, PP_NY = 1.37, PP_NH = 0.1525, PP_BR = 0.055, PP_G = 5.5, PP_CD = 1.8, PP_CAM = 0.9;
 const PP_R = 0.3, PP_AIMK = 0.75, PP_WIN = 11, PP_LIUY = 3.0, PP_REACH = 0.24, PP_YOUY = -0.15;
-// pacing (Max, 12 Oct: "slower, like Mr Shou's fight"): the ball, her feet and her reactions run at PP_SLOW of wall time;
-// your bat, the words and the call-outs run at full speed. PP_KEYV = how fast a held arrow key slides the bat (table
+// pacing: the ball runs at PP_SLOW of wall time; your bat, the words and the call-outs run at full speed. PP_SLOW was 0.72
+// (Max, 12 Oct: "slower, like Mr Shou's fight"); 0.94 since Max, 13 Oct: "increase the ping pong ball speed significantly
+// for both the start and the ending" (+30% from the first serve). PP_KEYV = how fast a held arrow key slides the bat (table
 // widths are 1.5), PP_CARD = the longest the instruction card waits for a key, PP_TOSS = the serve toss in seconds.
-const PP_SLOW = 0.72, PP_KEYV = 1.4, PP_CARD = 6, PP_TOSS = 0.55;
-// the end of the match speeds up a little (Max, 13 Oct: "the speed should increase slightly in the last few points"):
-// once either side has PP_RAMP0 + 1 points, the ball and her feet run PP_RAMPK faster per point, at most PP_RAMPN steps
-// (8 = +3.5%, 9 = +7%, 10 and deuce = +10.5%, past 10 = +14%). Early points keep the pace exactly.
-const PP_RAMP0 = 7, PP_RAMPK = 0.035, PP_RAMPN = 4;
+const PP_SLOW = 0.94, PP_KEYV = 1.4, PP_CARD = 6, PP_TOSS = 0.55;
+// the end of the match speeds up (Max, 13 Oct: "the speed should increase slightly in the last few points", then
+// "significantly for both the start and the ending"): once either side has PP_RAMP0 + 1 points, the ball runs PP_RAMPK
+// faster per point, at most PP_RAMPN steps (7 = +5%, 8 = +10%, 9 = +15%, 10 and deuce = +20%, past 10 = +25%).
+// The old ramp topped out at +14% on the old pace, so the last points are now about 43% faster than they were.
+const PP_RAMP0 = 6, PP_RAMPK = 0.05, PP_RAMPN = 5;
+// PP_FEET: her feet and reactions run at this share of the ball's pace (1 = the same pace as the ball). 0.766 keeps her
+// feet at the old 0.72 pace while the ball is faster: with her feet sped up too, a casual-player sim kept its first life
+// in only 27% of matches (it was 95%); with this it keeps it in 82% (60 matches each, WebKit, 13 Oct).
+const PP_FEET = 0.766;
 const ppPace = () => PP_SLOW * (1 + PP_RAMPK * clamp(Math.max(PP.score.you, PP.score.liu) - PP_RAMP0, 0, PP_RAMPN));
 // difficulty: PP_BATV is not used since the 11 Oct racquet came back (the bat follows the trackpad at once; a held key slides
 // it at PP_KEYV);
@@ -463,7 +469,7 @@ function ppUpdate(dt) {
   if (PP.stop > 0.001) { if (dt >= 0.05) PP.stop = 0; else { PP.stop -= dt; dt = 0; } }
   PP.shake = Math.max(0, PP.shake - dt); PP.netW = Math.max(0, PP.netW - dt);
   PP.t += dt;
-  const sdt = dt * ppPace();
+  const sdt = dt * ppPace(), ldt = sdt * PP_FEET;
   if (window.AUTO) { if (PP.human) ppHumanBot(dt); else ppBot(); }
   // the instruction card waits for a key, at most PP_CARD seconds (a bot run skips it after 1.2 s)
   if (PP.phase === 'card') { PP.cardT += dt; if (PP.cardT >= (window.AUTO ? 1.2 : PP_CARD)) ppStart(); }
@@ -499,12 +505,12 @@ function ppUpdate(dt) {
   if (b.live) { b.trail.push([b.x, b.y, b.z]); if (b.trail.length > 7) b.trail.shift(); }
   b.sq = Math.max(0, b.sq - dt);
   // her movement: wait out the reaction, then shuffle toward where it will land; otherwise drift back to the middle
-  L.moodT -= dt; L.lunge -= dt; L.swing = Math.max(0, L.swing - sdt);
+  L.moodT -= dt; L.lunge -= dt; L.swing = Math.max(0, L.swing - ldt);
   if (L.moodT <= 0 && ['swing', 'lunge', 'win', 'lose', 'duck'].includes(L.mood) && PP.phase !== 'won') L.mood = 'idle';
   if (PP.phase === 'rally' && b.last === 'you') {
-    L.react -= sdt;
-    if (L.react <= 0 && L.mood !== 'lunge') L.x += clamp(L.aim - L.x, -PP.vmax * sdt, PP.vmax * sdt);
-  } else if (PP.phase !== 'won') L.x += clamp(0 - L.x, -0.7 * sdt, 0.7 * sdt);
+    L.react -= ldt;
+    if (L.react <= 0 && L.mood !== 'lunge') L.x += clamp(L.aim - L.x, -PP.vmax * ldt, PP.vmax * ldt);
+  } else if (PP.phase !== 'won') L.x += clamp(0 - L.x, -0.7 * ldt, 0.7 * ldt);
   L.blink = (PP.t % 3.4) < 0.12 ? 1 : 0;
   if (L.mood === 'lose' || L.mood === 'duck') L.slip = Math.min(1, L.slip + dt * 5); else L.slip = Math.max(0, L.slip - dt * 1.2);
   L.pony = lerp(L.pony, clamp(-(L.aim - L.x) * 0.8, -0.6, 0.6) * (PP.phase === 'rally' ? 1 : 0), 0.15);

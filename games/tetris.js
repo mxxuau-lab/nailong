@@ -1,27 +1,30 @@
-// ---------- NAILONG TETRIS: on Jed's phone, in the Chinese room ----------
+// ---------- NAILONG TETRIS: on Jed's open MacBook (Max, 13 Oct: "Jed has an open macbook"), in the Chinese room ----------
 // Real guideline Tetris: SRS rotation with wall kicks, 7-bag, hold (once per piece), ghost piece, 5 next,
 // 0.5 s lock delay (15 move resets), DAS/ARR, soft drop and hard drop, block-out and lock-out top-outs.
-// ONE level, clear 10 lines to win, on a HALF-HEIGHT well (Max, 13 Oct: "half the amount of space in tetris"): 10 visible
-// rows, not 20. Gravity is guideline LEVEL 6 (about 0.26 s a row), so a piece takes as long to reach the floor of the short
-// well as it did at level 8 in the full one: the space halves, the speed she felt stays. The clip before ends on
-// "WHY'S IT SO FAST!!??", so the speed is the joke. Under the board, Jed's phone shows on-screen buttons (they work on click).
+// Clear 10 lines to win, on a HALF-HEIGHT well (Max, 13 Oct: "half the amount of space in tetris"): 10 visible rows, not 20.
+// The speed ramps (Max, 13 Oct: "when the game starts it quickly accelerates when hes playing"): it starts at guideline LEVEL 1
+// (1 s a row, a normal pace) and goes up a level every 2.5 s of play, to LEVEL 5 (about 0.36 s a row) at 10 s, and stays there.
+// Every level up flashes FASTER!, and at the top Nailong says "WHY'S IT SO FAST!!??". A top-out starts the next try slow again.
+// Plain Tetris, nothing shown ahead (Max, 13 Oct: "there's no level 6 on the side, no holding blocks, and no next blocks ... with
+// tetris there's no preshowing where it's gonna go either"): no level readout, no hold, no next pieces, no ghost piece. So the top
+// speed is level 5, not the 6 tuned with all of those. A loss is unmistakable ("make sure that when she loses in the level it's
+// clear that she lsot"): the stack turns grey, YOU LOST! across the screen, and only then the ride takes a heart.
+// On-screen buttons work on click.
 // EVERY visible line lives here. // TODO joke = a kind placeholder Max can swap.
 const LINES_TETRIS = {
   title: 'NAILONG TETRIS',
   // the instruction card (until a key, at most 6 s)
   cardGoal: 'CLEAR 10 LINES',
-  cardSub: 'on Jed\'s phone. It\'s FAST.',
-  keyMove: 'move', keyTurn: 'turn', keyDrop: 'drop', keyHold: 'hold',
-  capSpace: 'space', capHold: 'C',
+  cardSub: 'on Jed\'s MacBook. It\'s FAST.',
+  keyMove: 'move', keyTurn: 'turn', keyDrop: 'drop',
+  capSpace: 'space',
   cardGo: 'press any key to start',
-  // the phone screen
+  // the MacBook screen (the clock in its menu bar)
   phoneTime: '1:47',
-  holdTxt: 'HOLD',
-  nextTxt: 'NEXT',
-  levelTxt: 'LEVEL',
-  levelNum: '6',
+  faster: 'FASTER!',                                // flashes on the board at each level up
   linesTxt: 'LINES',
-  oops: 'OOPS',
+  lost: 'YOU LOST!',                                 // the loss, across the screen
+  lostSub: 'The blocks reached the top.',
   winTitle: 'CLEARED!',
   clear: ['Nice!', 'Two!', 'Three! Wow!', 'TETRIS!!'],      // the pop on the board
   // Nailong
@@ -41,11 +44,13 @@ const LINES_TETRIS = {
   jedFail: ['Easy, huh?', 'Still easy?'],           // TODO joke
   jedTetris: 'No way.',                             // TODO joke
   jedWin: 'Okay... that was good.',                 // TODO joke
-  hint: 'laptop: ← → move, ↑ or X turn, Z turn back, ↓ soft drop, space hard drop, C hold   |   phone: tap turn, drag move, swipe down drop, tap HOLD',
+  hint: 'laptop: ← → move, ↑ or X turn, Z turn back, ↓ soft drop, space hard drop   |   phone: tap turn, drag move, swipe down drop',
 };
 
-// gravity in seconds per row: the guideline curve (0.8 - (L-1)*0.007)^(L-1) at level 6 = 0.2620 (level 8 was 0.1347)
-const TG = { GOAL: 10, LEVEL: 6, GRAV: Math.pow(0.8 - 5*0.007, 5), COLS: 10, ROWS: 12, HID: 2, VIS: 10, CS: 30, LOCK: 0.5, MAXRESET: 15, DAS: 0.14, ARR: 0.03, SOFT: 0.03, FLASH: 0.36, CARDMAX: 6 };
+// gravity in seconds per row: the guideline curve (0.8 - (L-1)*0.007)^(L-1): level 1 = 1.0, 2 = 0.793, 3 = 0.618, 4 = 0.473,
+// 5 = 0.355, 6 = 0.262. The level goes up one every TG.STEP seconds of play, up to TG.LEVEL.
+const tGrav = L => Math.pow(0.8 - (L - 1)*0.007, L - 1);
+const TG = { GOAL: 10, LEVEL: 5, STEP: 2.5, COLS: 10, ROWS: 12, HID: 2, VIS: 10, CS: 30, LOCK: 0.5, MAXRESET: 15, DAS: 0.14, ARR: 0.03, SOFT: 0.03, FLASH: 0.36, CARDMAX: 6 };
 const TCOL = { G: '#8d88a6', I: '#5ad2f0', O: '#FFD21F', T: '#b072e0', S: '#6cc24a', Z: '#e8423b', J: '#3a7bd5', L: '#f59a2f' };
 const TBASE = {
   I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
@@ -100,6 +105,7 @@ function tReset(again){
   TT.board = Array.from({length: TG.ROWS}, () => Array(TG.COLS).fill(null));
   TT.queue = []; tRefill(); TT.hold = null; TT.canHold = true; TT.lines = 0; TT.goal = TG.GOAL;
   TT.p = null; TT.state = again ? 'play' : 'card'; TT.cardT = 0; TT.deadT = 0; TT.winT = 0; TT.flashT = 0; TT.flashRows = [];
+  TT.speedT = 0; TT.level = 1; TT.fasterT = 0;   // the speed ramp starts again on every try
   TT.cheer = 0; TT.panicCd = 0; TT.stackH = 0; TT.trails = []; TT.pid = 0; TT.botN = 0; TT.botPlan = null; TT.botT = 0; TT.pop = {text: '', t: 0};
   TT.das = {dir: 0, t: 0, arr: 0}; TT.g = null;
   TT.bump = {t: 0, dur: 0.12, amp: 0};   // the board dips on a hard drop (bigger on a Tetris)
@@ -124,7 +130,7 @@ function tDie(){
   TT.say = tSay(LINES_TETRIS.fail[TT.failBag.pop()]);
   TT.jed = tSay(LINES_TETRIS.jedFail[(TT.deaths - 1) % LINES_TETRIS.jedFail.length]);
   window.SFX && SFX.play('sad');   // top-out: the sad trombone
-  const api = GAMES.tetris.api; api && api.died && api.died();   // ride-wide lives (main.js): once per top-out
+  TT.diedSent = false;             // the ride takes a heart once the loss has been on screen (tUpdate)
 }
 const tGround = () => tCollide(TT.p.t, TT.p.r, TT.p.x, TT.p.y + 1);
 function tTouch(){   // a successful move or turn while resting resets lock delay (max 15 times)
@@ -157,12 +163,6 @@ function tHard(){
   TT.bump = {t: 0.14, dur: 0.14, amp: 5};   // the slam: the board dips a few units and springs back (gravity locks do not)
   window.SFX && SFX.play('thud', {g: 0.6});
   tLock(true);
-}
-function tDoHold(){
-  if (TT.state !== 'play' || !TT.canHold || !TT.p) return;
-  const cur = TT.p.t, nxt = TT.hold || TT.queue.shift();
-  TT.hold = cur; tSpawn(nxt); TT.canHold = false;
-  window.SFX && SFX.play('swish');   // the piece flicks into the HOLD box
 }
 function tTopRow(){ for (let r = 0; r < TG.ROWS; r++) if (TT.board[r].some(v => v)) return r; return TG.ROWS; }
 function tLock(hard){
@@ -227,8 +227,7 @@ function tBot(dt){
   const p = TT.p; if (!p || TT.state !== 'play') return;
   TT.botT += dt; if (TT.botT < 0.045) return; TT.botT = 0;
   if (!TT.botPlan || TT.botPlan.pid !== TT.pid) {
-    const a = tBotEval(p.t), b = TT.canHold ? tBotEval(TT.hold || TT.queue[0]) : null;
-    if (b && (!a || b.score > a.score + 0.4)) { tDoHold(); return; }
+    const a = tBotEval(p.t);
     TT.botPlan = Object.assign({pid: TT.pid}, a || {r: p.r, x: p.x}); TT.botN = 0;
   }
   const pl = TT.botPlan; TT.botN++;
@@ -252,12 +251,18 @@ function tUpdate(dt){
   TT.trails = TT.trails.filter(tr => tr.t > 0);
   if (TT.cheer > 0 && TT.cheer < 90) TT.cheer -= dt;
   if (TT.panicCd > 0) TT.panicCd -= dt;
+  if (TT.fasterT > 0) TT.fasterT -= dt;
   if (TT.state === 'card') {
     TT.cardT += dt;
     if (TT.cardT >= TG.CARDMAX || (window.AUTO && TT.cardT >= 1.5)) tStart();
     return;
   }
-  if (TT.state === 'dead') { TT.deadT += dt; if (TT.deadT > 0.95) tReset(true); return; }
+  if (TT.state === 'dead') {        // YOU LOST! for 1.4 s, then the ride's lives (main.js) once per top-out, then a fresh try
+    TT.deadT += dt;
+    if (TT.deadT >= 1.4 && !TT.diedSent) { TT.diedSent = true; const api = GAMES.tetris.api; api && api.died && api.died(); }
+    if (TT.deadT > 2.5) tReset(true);
+    return;
+  }
   if (TT.state === 'won') {
     TT.winT += dt;
     if (TT.winT > 2.0 && !TT.finished) { TT.finished = true; GAMES.tetris.api.done(); }
@@ -268,12 +273,18 @@ function tUpdate(dt){
   TT.time += dt;
   if (window.AUTO) tBot(dt);
   if (TT.state !== 'play' || !TT.p) return;
+  TT.speedT += dt;                        // the speed ramp: up a level every TG.STEP s of play
+  const lv = Math.min(TG.LEVEL, 1 + Math.floor(TT.speedT/TG.STEP));
+  if (lv > TT.level) {
+    TT.level = lv; TT.fasterT = 0.9; window.SFX && SFX.play('boing', {p: 1 + 0.08*lv, g: 0.5});
+    if (lv === TG.LEVEL) { TT.say = tSay(LINES_TETRIS.panic[0]); TT.panicCd = 4; }   // at the top: "WHY'S IT SO FAST!!??"
+  }
   const d = TT.das;                       // sideways: DAS then ARR
   if (d.dir) {
     d.t += dt;
     if (d.t > TG.DAS) { d.arr += dt; while (d.arr >= TG.ARR) { d.arr -= TG.ARR; if (!tMove(d.dir, 0)) { d.arr = 0; break; } } }
   }
-  const iv = TT.keys.down ? Math.min(TG.SOFT, TG.GRAV) : TG.GRAV;   // gravity / soft drop
+  const gv = tGrav(TT.level), iv = TT.keys.down ? Math.min(TG.SOFT, gv) : gv;   // gravity / soft drop
   TT.gravAcc += dt;
   while (TT.gravAcc >= iv) { if (tMove(0, 1)) TT.gravAcc -= iv; else { TT.gravAcc = 0; break; } }
   if (tGround()) { TT.lockT += dt; if (TT.lockT >= TG.LOCK) tLock(); } else TT.lockT = 0;
@@ -293,9 +304,10 @@ function tMini(type, cx, cy, cs, a = 1){
   const ox = cx - (c1 - c0)*cs/2, oy = cy - (r1 - r0)*cs/2;
   for (const [c, r] of cells) tTile(ox + (c - c0)*cs, oy + (r - r0)*cs, cs, TCOL[type], a);
 }
-// the Chinese room (s2Room from story-school2.js, so it matches the clip), dimmed a little so the phone pops
+// the Chinese room (s2Room from story-school2.js, so it matches the clip, with the hole Nailong made in the ceiling), dimmed a
+// little so the MacBook pops
 function tRoom(t){
-  if (typeof s2Room === 'function') { ctx.save(); s2Room(t); ctx.restore(); }
+  if (typeof s2Room === 'function') { ctx.save(); s2Room(t); if (typeof s2Hole === 'function') s2Hole(W*0.14, 1, 9); ctx.restore(); }
   else { ctx.fillStyle = '#ecebe6'; ctx.fillRect(0, 0, W, H*0.7); ctx.fillStyle = '#585d70'; ctx.fillRect(0, H*0.7, W, H*0.3); }
   ctx.fillStyle = 'rgba(29,22,64,.28)'; ctx.fillRect(0, 0, W, H);
 }
@@ -329,82 +341,84 @@ function tCard(t){
   ctx.fillStyle = '#fff'; rr(x0, y0, cw, ch, 28); ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = C.line; ctx.stroke();
   title(L.cardGoal, W/2, y0 + 72, 60);
   font(26, 600); ctx.fillStyle = C.line; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(L.cardSub, W/2, y0 + 128);
-  // keys: [<][>] move   [^] turn   [space] drop   [C] hold
-  const kh = 54, kw = 58, sw = 136, gap = 44, groups = [kw*2 + 10, kw, sw, kw], total = groups.reduce((a, b) => a + b, 0) + gap*3;
+  // keys: [<][>] move   [^] turn   [space] drop
+  const kh = 54, kw = 58, sw = 136, gap = 56, groups = [kw*2 + 10, kw, sw], total = groups.reduce((a, b) => a + b, 0) + gap*2;
   let gx = W/2 - total/2; const ky = y0 + 172, ly = ky + kh + 34;
   const label = (txt, cx) => { font(24, 600); ctx.fillStyle = C.line; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, cx, ly); };
   tKey(gx, ky, kw, kh, 'L'); tKey(gx + kw + 10, ky, kw, kh, 'R'); label(L.keyMove, gx + groups[0]/2); gx += groups[0] + gap;
   tKey(gx, ky, kw, kh, 'U'); label(L.keyTurn, gx + kw/2); gx += kw + gap;
-  tKey(gx, ky, sw, kh, 'text', L.capSpace); label(L.keyDrop, gx + sw/2); gx += sw + gap;
-  tKey(gx, ky, kw, kh, 'text', L.capHold); label(L.keyHold, gx + kw/2);
+  tKey(gx, ky, sw, kh, 'text', L.capSpace); label(L.keyDrop, gx + sw/2);
   ctx.globalAlpha = 0.6 + 0.4*Math.sin(t*3.2);
   font(22, 600); ctx.fillStyle = '#8a7a52'; ctx.fillText(L.cardGo, W/2, y0 + ch - 34); ctx.globalAlpha = 1;
   ctx.restore();
 }
-// the phone game's on-screen buttons, in the space under the board: move left, move right | turn, drop. Drawn in phone
-// coordinates (story-school2.js draws the same phone, so its zoom lands on these too). Returns the button circles.
-function tPad(sx, top, sw, room){
-  const cy = top + room/2, r = 36, xs = [sx + 66, sx + 152, sx + sw - 152, sx + sw - 66], kinds = ['L', 'R', 'turn', 'drop'], out = [];
+// Jed's MacBook: the lid (silver edge, black bezel, the notch), the screen, the silver base on the desk. Measured from the centre
+// of the whole laptop, so story-school2.js draws the same laptop small on Jed's desk and its zoom lands exactly on this one.
+const TM = {SW: 640, SH: 420, BZ: 14, CHIN: 26, BASE: 22};
+TM.LW = TM.SW + 2*TM.BZ; TM.LH = TM.BZ + TM.SH + TM.CHIN; TM.TH = TM.LH + TM.BASE;
+const tMacC = () => [Math.round(W/2), Math.round(H/2 + 34)];          // where the game draws it
+function tMacGeom(){ const LX = -TM.LW/2, LY = -TM.TH/2; return {LX, LY, SX: LX + TM.BZ, SY: LY + TM.BZ}; }
+function tMacBody(lw){                                                 // in the laptop's own coords (origin = its centre)
+  const g = tMacGeom(), by = g.LY + TM.LH;
+  ctx.save(); ctx.lineJoin = 'round'; ctx.strokeStyle = C.line;
+  ctx.beginPath(); ctx.moveTo(-TM.LW/2 - 16, by - 2); ctx.lineTo(TM.LW/2 + 16, by - 2); ctx.lineTo(TM.LW/2 + 50, by + TM.BASE); ctx.lineTo(-TM.LW/2 - 50, by + TM.BASE); ctx.closePath();
+  ctx.fillStyle = '#d3d6dd'; ctx.fill(); ctx.lineWidth = lw; ctx.stroke();
+  ctx.fillStyle = '#a3a8b3'; rr(-56, by, 112, 7, 3); ctx.fill();                                   // the thumb notch
+  ctx.fillStyle = '#b6bac4'; rr(g.LX, g.LY, TM.LW, TM.LH, 20); ctx.fill(); ctx.lineWidth = lw*1.4; ctx.stroke();
+  ctx.fillStyle = '#121317'; rr(g.LX + 5, g.LY + 5, TM.LW - 10, TM.LH - 10, 16); ctx.fill();
+  ctx.fillStyle = C.navy; rr(g.SX, g.SY, TM.SW, TM.SH, 6); ctx.fill();
+  ctx.restore();
+}
+function tMacBar(SX, SY, SW, clock){                                   // the menu bar: clock, a nearly flat battery, the notch
+  ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(SX, SY, SW, 24);
+  font(14, 600); ctx.fillStyle = '#fff'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(clock, SX + SW - 14, SY + 13);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; rr(SX + SW - 90, SY + 6, 26, 12, 3); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.fillRect(SX + SW - 63, SY + 9, 3, 6);
+  ctx.fillStyle = '#e8423b'; rr(SX + SW - 87, SY + 9, 5, 6, 1); ctx.fill();
+  ctx.fillStyle = '#121317'; rr(SX + SW/2 - 50, SY - 1, 100, 20, 8); ctx.fill();
+}
+// where everything sits on the screen (SX, SY = its top left): HOLD and LEVEL left, the board, NEXT right, LINES under the
+// board, the four on-screen buttons in the bottom corners
+function tMacLayout(SX, SY){
+  const BW = TG.CS*TG.COLS, BH = TG.CS*TG.VIS, BX = SX + (TM.SW - BW)/2, BY = SY + 34, cw = 110;
+  const lc = (SX + BX - 5)/2, rc = (BX + BW + 5 + SX + TM.SW)/2;
+  return {BX, BY, BW, BH, cw, LX: lc - cw/2, RX: rc - cw/2, padY: SY + 380, padR: 30, padXs: [lc - 36, lc + 36, rc - 36, rc + 36]};
+}
+// the game's on-screen buttons: move left, move right | turn, drop (a click on one does what it shows). Returns the circles.
+function tPad(xs, cy, r){
+  const kinds = ['L', 'R', 'turn', 'drop'], out = [], f = r/36;
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   xs.forEach((x, i) => {
     ell(x, cy, r, r); ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.stroke();
     ctx.fillStyle = ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 6;
-    const k = kinds[i];
+    const k = kinds[i]; ctx.save(); ctx.translate(x, cy); ctx.scale(f, f); ctx.translate(-x, -cy);
     if (k === 'L' || k === 'R') { const d = k === 'L' ? -1 : 1; ctx.beginPath(); ctx.moveTo(x + d*13, cy); ctx.lineTo(x - d*9, cy - 14); ctx.lineTo(x - d*9, cy + 14); ctx.closePath(); ctx.fill(); }
     else if (k === 'turn') { ctx.beginPath(); ctx.arc(x, cy, 15, -Math.PI*0.35, Math.PI*1.25); ctx.stroke();
       const ax = x + Math.cos(-Math.PI*0.35)*15, ay = cy + Math.sin(-Math.PI*0.35)*15; ctx.beginPath(); ctx.moveTo(ax + 9, ay - 6); ctx.lineTo(ax - 2, ay - 9); ctx.lineTo(ax + 1, ay + 3); ctx.closePath(); ctx.fill(); }
     else { ctx.beginPath(); ctx.moveTo(x, cy - 15); ctx.lineTo(x, cy + 4); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - 12, cy + 1); ctx.lineTo(x + 12, cy + 1); ctx.lineTo(x, cy + 15); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
     out.push({x, y: cy, r, k});
   });
   ctx.restore();
   return out;
 }
-function tPhoneStatus(sx, sy, sw){
-  const L = LINES_TETRIS;
-  font(16, 600); ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(L.phoneTime, sx + 22, sy + 16);
-  ctx.fillStyle = '#000'; rr(sx + sw/2 - 48, sy + 5, 96, 22, 11); ctx.fill();
-  // signal bars and a nearly flat battery
-  ctx.fillStyle = '#fff'; for (let i = 0; i < 4; i++) { const bh = 4 + i*2.5; ctx.fillRect(sx + sw - 92 + i*6, sy + 21 - bh, 4, bh); }
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; rr(sx + sw - 54, sy + 9, 28, 14, 4); ctx.stroke(); ctx.fillRect(sx + sw - 25, sy + 13, 3, 6);
-  ctx.fillStyle = '#e8423b'; rr(sx + sw - 51, sy + 12, 6, 8, 2); ctx.fill();
-}
 function tDraw(t){
   const L = LINES_TETRIS, CS = TG.CS, BW = CS*TG.COLS, BH = CS*TG.VIS;
-  const PW = 470, PH = H - 46, PX = Math.round(W/2 - PW/2), PY = 10, BEZ = 14;
-  const SX = PX + BEZ, SY = PY + BEZ, SW = PW - 2*BEZ, SH = PH - 2*BEZ;
-  const BX = Math.round(W/2 - BW/2), BY = SY + 36;
+  const MC = tMacC(), mg = tMacGeom(), SX = MC[0] + mg.SX, SY = MC[1] + mg.SY, SW = TM.SW;
+  const PW = TM.LW, PX = MC[0] - PW/2, Lo = tMacLayout(SX, SY), BX = Lo.BX, BY = Lo.BY;
   const rowY = r => BY + (r - TG.HID)*CS;
   const dead = TT.state === 'dead', won = TT.state === 'won';
   const panic = TT.state === 'play' && TT.stackH >= 7, cheering = TT.cheer > 0;
 
   tRoom(t);
-  // Jed, behind the desk on the right, watching his phone
+  // Jed, behind the desk on the right, watching his MacBook
   const jx = Math.min(W - 110, PX + PW + (W - PX - PW)/2 + 10), jy = H + 76, js = 1.32;
   person(jx, jy, js, CAST.jed, {mouth: (TT.pop.big && TT.pop.t > 0) || won ? 'o' : 'smile', look: [-0.9, 0.35]});
-  const deskTop = PY + PH - 10;
+  const deskTop = MC[1] + TM.TH/2 - 3;
   tDesk(deskTop);
-  // the phone: Jed's blue case, side buttons, black bezel, the game screen
-  ell(W/2, PY + PH + 2, PW*0.46, 9); ctx.fillStyle = 'rgba(29,22,64,.25)'; ctx.fill();
-  ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.fillStyle = '#2f5a8a';
-  rr(PX - 7, PY + 130, 12, 46, 4); ctx.fill(); ctx.stroke(); rr(PX - 7, PY + 186, 12, 46, 4); ctx.fill(); ctx.stroke();
-  rr(PX + PW - 5, PY + 170, 12, 74, 4); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#3f6fa3'; rr(PX, PY, PW, PH, 52); ctx.fill(); ctx.lineWidth = 6; ctx.stroke();
-  ctx.fillStyle = '#15161a'; rr(PX + 6, PY + 6, PW - 12, PH - 12, 46); ctx.fill();
-  ctx.fillStyle = C.navy; rr(SX, SY, SW, SH, 38); ctx.fill();
-  tPhoneStatus(SX, SY, SW);
-
-  // left column: HOLD (click or tap it to hold) and LEVEL
-  const colW = BX - SX - 16, LX = SX + 8, RX = BX + BW + 8;
-  TT.holdRect = [LX - 4, BY - 4, colW + 8, 104];
-  font(15); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(L.holdTxt, LX + colW/2, BY + 10);
-  ctx.fillStyle = 'rgba(255,255,255,.08)'; rr(LX, BY + 24, colW, 72, 12); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.stroke();
-  if (TT.hold) tMini(TT.hold, LX + colW/2, BY + 60, 13, TT.canHold ? 1 : 0.35);
-  font(15); ctx.fillStyle = '#fff'; ctx.fillText(L.levelTxt, LX + colW/2, BY + 126);
-  title(L.levelNum, LX + colW/2, BY + 160, 40);
-  // right column: NEXT five
-  font(15); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(L.nextTxt, RX + colW/2, BY + 10);
-  ctx.fillStyle = 'rgba(255,255,255,.08)'; rr(RX, BY + 24, colW, 5*50 + 14, 12); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.stroke();
-  for (let i = 0; i < 5; i++) tMini(TT.queue[i], RX + colW/2, BY + 56 + i*50, i === 0 ? 13 : 11, i === 0 ? 1 : 0.85);
+  // the MacBook open on the desk, the game on its screen
+  ell(MC[0], deskTop + 4, PW*0.55, 9); ctx.fillStyle = 'rgba(29,22,64,.25)'; ctx.fill();
+  ctx.save(); ctx.translate(MC[0], MC[1]); tMacBody(4); ctx.restore();
+  tMacBar(SX, SY, SW, L.phoneTime);
 
   // the board (dips with TT.bump; the columns stay put)
   const bp = TT.bump;
@@ -414,8 +428,8 @@ function tDraw(t){
   for (let c = 1; c < TG.COLS; c++) { ctx.beginPath(); ctx.moveTo(BX + c*CS, BY); ctx.lineTo(BX + c*CS, BY + BH); ctx.stroke(); }
   for (let r = 1; r < TG.VIS; r++) { ctx.beginPath(); ctx.moveTo(BX, BY + r*CS); ctx.lineTo(BX + BW, BY + r*CS); ctx.stroke(); }
   ctx.save(); ctx.beginPath(); ctx.rect(BX - 2, BY, BW + 4, BH + 4); ctx.clip();   // the hidden rows above the board stay hidden
-  const dim = dead ? 0.5 : 1;
-  for (let r = 1; r < TG.ROWS; r++) for (let c = 0; c < TG.COLS; c++) { const v = TT.board[r][c]; if (v) tTile(BX + c*CS, rowY(r), CS, TCOL[v], dim); }
+  const grey = r => dead && (r - TG.HID + 1)/TG.VIS <= TT.deadT/0.6;   // a loss: the stack goes grey from the top down
+  for (let r = 1; r < TG.ROWS; r++) for (let c = 0; c < TG.COLS; c++) { const v = TT.board[r][c]; if (v) tTile(BX + c*CS, rowY(r), CS, grey(r) ? TCOL.G : TCOL[v]); }
   if (TT.state === 'clear') {   // the cleared rows go white, then shrink to the middle (no flicker)
     const k = clamp(1 - TT.flashT/TG.FLASH, 0, 1), w = BW*(k < 0.35 ? 1 : 1 - (k - 0.35)/0.65);
     for (const r of TT.flashRows) { ctx.fillStyle = '#fff'; ctx.fillRect(BX + BW/2 - w/2, rowY(r) + 1, w, CS - 2); }
@@ -423,10 +437,7 @@ function tDraw(t){
   for (const tr of TT.trails) { ctx.globalAlpha = tr.t/0.2*0.18; ctx.fillStyle = tr.col; ctx.fillRect(BX + tr.x0*CS, rowY(tr.r0), (tr.x1 - tr.x0)*CS, (tr.r1 - tr.r0)*CS); ctx.globalAlpha = 1; }
   const p = TT.p;
   if (p && TT.state === 'play') {
-    const gy = tGhostY(), col = TCOL[p.t];
-    for (const [c, r] of TCELLS(p.t, p.r, p.x, gy)) {
-      rr(BX + c*CS + 3, rowY(r) + 3, CS - 6, CS - 6, 6); ctx.globalAlpha = 0.22; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = 0.85; ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.stroke(); ctx.globalAlpha = 1;
-    }
+    const col = TCOL[p.t];   // no ghost piece: nothing shows where it will land
     const lk = tGround() ? 1 - 0.35*clamp(TT.lockT/TG.LOCK, 0, 1) : 1;
     for (const [c, r] of TCELLS(p.t, p.r, p.x, p.y)) tTile(BX + c*CS, rowY(r), CS, col, lk);
   }
@@ -444,14 +455,17 @@ function tDraw(t){
   ctx.lineWidth = 3; ctx.strokeStyle = C.line; rr(BX, gyb, BW, gh, 15); ctx.stroke();
   title(`${L.linesTxt}  ${Math.min(TT.lines, TT.goal)} / ${TT.goal}`, BX + BW/2, gyb + gh/2 + 1, 22, '#fff');
   // the phone's own touch buttons under the board (a click on one does what it shows)
-  TT.pad = tPad(SX, gyb + gh, SW, SY + SH - (gyb + gh));
+  TT.pad = tPad(Lo.padXs, Lo.padY, Lo.padR);   // in the bottom corners of the screen
 
   // overlays on the board
   const cx = BX + BW/2;
-  if (dead) { ctx.fillStyle = 'rgba(29,22,64,.42)'; ctx.fillRect(BX, BY, BW, BH); title(L.oops, cx, BY + BH*0.45, 56, '#fff'); }
   if (TT.pop.t > 0 && !won) {
     const k = 1 - TT.pop.t/1.1, sc = TT.pop.big ? 1 + Math.sin(k*Math.PI)*0.2 : 1;
     ctx.globalAlpha = clamp(TT.pop.t*2.5, 0, 1); title(TT.pop.text, cx, BY + 170 - k*24, (TT.pop.big ? 50 : 38)*sc, TT.pop.big ? '#fff' : C.y); ctx.globalAlpha = 1;
+  }
+  if (TT.fasterT > 0 && TT.state === 'play') {   // FASTER! at each level up
+    const k = 1 - TT.fasterT/0.9; ctx.globalAlpha = clamp(TT.fasterT*3, 0, 1);
+    title(L.faster, cx, BY + 60 - k*18, 40*(1 + 0.25*Math.sin(Math.min(1, k*3)*Math.PI)), '#ff8a3d'); ctx.globalAlpha = 1;
   }
   if (won) { ctx.fillStyle = 'rgba(29,22,64,.5)'; ctx.fillRect(BX, BY, BW, BH); title(L.winTitle, cx, BY + BH*0.45, 50 + Math.sin(TT.winT*5)*2); }
 
@@ -468,7 +482,21 @@ function tDraw(t){
   if (!quiet && TT.say.t > 0 && TT.say.text) bubble(TT.say.text, nx + 30, ny - 300 + by*0.5, 24, Math.max(150, PX - 50));
   if (!quiet && TT.jed.t > 0 && TT.jed.text) bubble(TT.jed.text, jx - 10, jy - 380, 22, Math.max(140, W - PX - PW - 40));
 
+  if (dead) tLost();
   if (TT.state === 'card') tCard(t);
+}
+// the loss, unmistakable: the screen dims, a red banner slams in across the middle, YOU LOST! (then main.js takes a heart)
+function tLost(){
+  const L = LINES_TETRIS, d = TT.deadT, k = clamp(d/0.28, 0, 1), sc = Math.max(0.01, fxBack(k)), cy = H*0.42;
+  const jx = d < 0.4 ? Math.sin(d*70)*8*(1 - d/0.4) : 0;
+  ctx.fillStyle = `rgba(29,22,64,${0.45*clamp(d/0.25, 0, 1)})`; ctx.fillRect(0, 0, W, H);
+  const bw = Math.min(W - 40, 640), bh = 150;
+  ctx.save(); ctx.translate(W/2 + jx, cy); ctx.scale(sc, sc); ctx.rotate(-0.03);
+  ctx.fillStyle = 'rgba(29,22,64,.5)'; rr(-bw/2 + 10, -bh/2 + 12, bw, bh, 26); ctx.fill();
+  ctx.fillStyle = '#d3303a'; rr(-bw/2, -bh/2, bw, bh, 26); ctx.fill(); ctx.lineWidth = 7; ctx.strokeStyle = C.line; ctx.stroke();
+  title(L.lost, 0, -16, Math.min(88, bw/7), '#fff');
+  font(26, 600); ctx.fillStyle = '#ffe9a8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(L.lostSub, 0, 46);
+  ctx.restore();
 }
 
 GAMES.tetris = {
@@ -491,14 +519,11 @@ GAMES.tetris = {
     else if (k === 'ArrowUp' || k === 'x' || k === 'X' || k === 'w' || k === 'W') tRotate(1);
     else if (k === 'z' || k === 'Z') tRotate(-1);
     else if (k === ' ') tHard();
-    else if (k === 'c' || k === 'C' || k === 'Shift') tDoHold();
   },
   pointer(kind, x, y){
     const CS = TG.CS;
     if (kind === 'down') {
       if (TT.state === 'card') { tStart(); TT.g = null; return; }
-      const hr = TT.holdRect;
-      if (x >= hr[0] && x <= hr[0] + hr[2] && y >= hr[1] && y <= hr[1] + hr[3]) { tDoHold(); TT.g = null; return; }
       const b = (TT.pad || []).find(p => Math.hypot(x - p.x, y - p.y) <= p.r + 6);   // the phone's own buttons
       if (b) { if (b.k === 'L') tMove(-1, 0); else if (b.k === 'R') tMove(1, 0); else if (b.k === 'turn') tRotate(1); else tHard(); TT.g = null; return; }
       TT.g = {sx: x, sy: y, ax: x, ay: y, t0: performance.now(), moved: false};
