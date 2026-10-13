@@ -19,9 +19,9 @@
 // Test hooks: ?clip=sceneIntro, &answer=yes|maybe|no answers by itself at the question, ?unlock=1 clears the lock.
 // Test runs (?auto=1, ?hold=1, ?sim=) never read or write the stored lock.
 const LINES_INTRO = {
-  hi: 'Hi Crony, this is',                          // Max's line ("Hi Crony, This is ...")
-  gameName: 'Nailong on the Loose.',               // the game's name: placeholder, Max may change it
-  logo: 'NAILONG ON THE LOOSE',                    // the same name as a big sticker title. placeholder, Max to edit
+  hi: "Hi, you're playing",                        // Max's line (13 Oct: "hi, you're playing nai long lands in Canberra")
+  gameName: 'Nailong Lands in Canberra.',          // the game's name (Max, 13 Oct)
+  logo: 'NAILONG LANDS IN CANBERRA',               // the same name as a big sticker title
   scream: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',      // Nailong's scream: shown a few more letters each beat
   thatsNailong: "That's Nailong.",                  // Max's line
   question: 'Have you got 15 min?',                // Max's line
