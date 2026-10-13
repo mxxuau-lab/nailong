@@ -99,6 +99,14 @@ function stBigLeg(hx, hy, len, w, ang){
   ctx.fillStyle = C.claw; for (const d of [-0.5, 0, 0.5]) { ell(ex + c*w*0.42 - s*d*w*0.7, ey + s*w*0.42 + c*d*w*0.7, w*0.08, w*0.08); ctx.fill(); }
   ctx.restore();
 }
+// Nailong holding something in both paws (the boba, the red bean bottle). core.js nailong() always draws his two side arms, so while
+// he holds it they are left out and the two paws drawn on the cup are his only hands (Max, 13 Oct: "in this scene nai long grows extra hands").
+// It skips exactly the arm shapes nailong() draws (12 x 23 ellipses) and their claws (2.6 dots); if core.js ever changes them, the arms come back.
+function stNailongHolding(x, y, s, o){
+  const real = window.ell;
+  window.ell = (x0, y0, rx, ry, rot = 0) => { if ((rx === 12 && ry === 23) || (rx === 2.6 && ry === 2.6)) { ctx.beginPath(); return; } real(x0, y0, rx, ry, rot); };
+  try { nailong(x, y, s, o); } finally { window.ell = real; }
+}
 // the boba cup from the bottle game (bottlesort.js, drink 5): feet-centre (x,y), h tall, level 0..1 of tea left, tip = where the straw ends (world), or null
 function stBoba(x, y, h, rot = 0, level = 1, tip = null){
   const k = h/100; let tx = 14, ty = -104;
@@ -790,7 +798,7 @@ function sceneCafe1(T){
   let armL = 0.06, lenL = 1, tiptoe = 0, lean = 0, bPos = null;
   const baseY = gy - (walking ? Math.abs(Math.sin(t*12))*5 : 0);
   const k = SS_*CAST.scarlett.h;
-  const hold = [nx + 8, gy - 100*NS*sy];                               // where Nailong's hands end up
+  const hold = [nx + 4*NS, gy - 14*NS - 31];                           // where the bottle ends up: low against his belly, in his paws (it floated over his mouth before)
   if (t >= 5.9) {
     const reach = ease(stSeg(t, 5.9, 6.2)), down = ease(stSeg(t, 6.35, 7.0)), back = ease(stSeg(t, 7.0, 7.5));
     tiptoe = 14*reach*(1 - down); lean = -0.05*reach*(1 - down);
@@ -803,15 +811,16 @@ function sceneCafe1(T){
   }
   // ---- draw order: Scarlett, Nailong ----
   stShadow(nx, gy + 2, 80*NS); if (sxS < W + 200) stShadow(sxS, gy + 2, 70);
-  if (sxS < W + 200) {
-    let mouth = 'smile';
-    storyPerson(sxS, baseY - tiptoe, SS_, CAST.scarlett, {mouth, look: [-0.7, 0.5], armL, lenL, rot: lean});
-  }
+  const drawScarlett = () => { if (sxS < W + 200) storyPerson(sxS, baseY - tiptoe, SS_, CAST.scarlett, {mouth: 'smile', look: [-0.7, 0.5], armL, lenL, rot: lean}); };
+  const handing = t >= 6.35 && t < 7.5;                                 // lowering the bottle to him: her arm in front of him, so her hand stays on it
+  if (!handing) drawScarlett();
   const bobN = 0;
-  nailong(nx, ny - bobN, NS, {...o, sx, sy, rot});
+  (t >= 7.0 ? stNailongHolding : nailong)(nx, ny - bobN, NS, {...o, sx, sy, rot});   // holding the bottle: its two paws are his hands
+  if (handing) drawScarlett();
   fxMark('sweat', nx + 50*NS, ny - 186*NS*sy, stSeg(t, 5.05, 5.7));    // sweat drop after the third failed jump
   stDust(nx, gy, stSeg(t, 1.2, 2.0), 22);
-  if (bPos) { const hh = 62, rot2 = t >= 6.35 ? 0 : 0; if (t < 7.0 || t >= 7.0) stRedBean(bPos[0], bPos[1] + (t < 7.0 ? 30 : 0)*0 + hh*0.5, hh, rot2); }
+  if (bPos) { const hh = 62, fx = bPos[0], fy = bPos[1] + hh*0.5; stRedBean(fx, fy, hh, 0);
+    if (t >= 7.0) for (const sg of [-1, 1]) { ell(fx + sg*hh*0.25, fy - hh*0.36, 11*NS, 9*NS); ctx.fillStyle = C.y; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.stroke(); } }   // his paws round it, like the boba in sceneCafe2
   if (false) {   // (the old octagon-portal arrival, kept out of the ride since the Chinese room now comes first)
     const pr = 0, pcx = 0, pcy = 0, portal = 0;
     const poly = () => { ctx.beginPath(); for (let i = 0; i <= 8; i++) { const a = i/8*Math.PI*2 + Math.PI/8 + t*3; const px = pcx + Math.cos(a)*pr, py = pcy + Math.sin(a)*pr; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath(); };
@@ -909,7 +918,7 @@ function sceneCafe2(t){
     stBigLeg(hx, hy, len, w, Math.atan2(-Math.sin(a), -Math.cos(a)));
   }
   stShadow(nx, gy + 2, 80*NS);
-  nailong(nx, ny, NS, {...o, sx: nsx, sy: nsy, rot: nrot});
+  (t < C2.kick + 0.05 ? stNailongHolding : nailong)(nx, ny, NS, {...o, sx: nsx, sy: nsy, rot: nrot});   // holding the boba: its two paws are his hands
   if (brows) stBrows(nx, ny, NS, brows, nsx, nsy, nrot);
   if (t > C2.land) stDust(nxB, gy, stSeg(t, C2.land, C2.land + 0.7), 22);
   fxMark('sweat', nx + 50*NS, ny - 186*NS, stSeg(t, C2.cooked[0] + 0.7, C2.cooked[0] + 1.5));
@@ -1034,7 +1043,7 @@ function sceneCafe3(t){
   let sxS = dx + dw*0.55, sw = 0, moving = false;
   if (t > C3.bang) {
     sxS = lerp(dx + dw*0.5, dx + dw + 30, ease(stSeg(t, C3.bang + 0.05, C3.bang + 0.45)));
-    if (t > C3.chase) { const u = stSeg(t, C3.chase, CAFE3_DUR); sxS += u*u*W*0.6; sw = t*15; moving = true; }
+    if (t > C3.chase) { const u = stSeg(t, C3.chase, CAFE3_DUR); sxS += u*u*W*1.1; sw = t*15; moving = true; }   // off the right edge just before the cut (he stopped mid-screen)
     const shout = t < 6.3, raise = fxBack(stSeg(t, C3.bang + 0.1, C3.bang + 0.35));
     const o = {books: 4, armR: moving ? 0.5 + Math.sin(t*15)*0.3 : 0.5 + 2.3*raise, mouth: shout ? 'o' : 'grin', eyes: 'dot', brow: shout ? 'up' : undefined, look: [1, -0.1],
       walk: sw, moving, rot: moving ? 0.08 : 0, hair: Math.sin(t*9)*0.5};

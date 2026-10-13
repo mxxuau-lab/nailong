@@ -85,7 +85,7 @@ const PATTERN = 'mlmhmmhlmlmhmmlh';
 const PAIRS = ['ml', 'mh', 'lm', 'hm'];   // a two-book throw is always one to hit and one to dodge
 const DMG = {hit: 7, perfect: 9, nai: 20};   // about 12 to 14 hits knock him out (a long bar); 5 books knock Nailong out
 const CHECK = [66.7, 33.3];               // notches on his bar: a knockout of Nailong resumes from the last one passed
-const LOSE_T = 1.8;                       // seconds on the knockout before the retry (any key after 0.6 s goes sooner)
+const LOSE_T = 2.8;                       // seconds on the knockout before the retry (any key after 0.6 s goes sooner); long enough to read the fail line
 
 const R = (a, b) => a + Math.random()*(b - a);
 const pick = a => a[Math.floor(Math.random()*a.length)];
@@ -107,16 +107,13 @@ function shou(x, y, s, o = {}) {
   const hl = [-38 - Math.sin(armL)*ARML, SYo + Math.cos(armL)*ARML], hr = [38 + Math.sin(armR)*ARML, SYo + Math.cos(armR)*ARML];
   ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s*sx, s*sy); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   const outline = (draw, fill, lw = 12) => { draw(); ctx.lineWidth = lw; ctx.strokeStyle = L; ctx.stroke(); draw(); ctx.fillStyle = fill; ctx.fill(); };
-  // straight black hair behind the head, falling to the shoulders and a little under (Max, 12 Oct: "not so long");
-  // the ends rest on the shoulders and flick out a touch past the blazer
+  // straight black hair behind the head: ONE sheet hanging straight down to just below the shoulders, no tails, no flicks
+  // (Max, 12 Oct: "not so long"; 13 Oct: "his hair actually all goes down instead of like pony tails ... like it's one sheet")
   const hs = hair*6;
-  outline(() => { ctx.beginPath(); ctx.moveTo(-40, -240);
-    ctx.bezierCurveTo(-54, -224, -51 + hs*0.5, -198, -50 + hs, -180);
-    ctx.quadraticCurveTo(-51 + hs*1.3, -168, -57 + hs*1.6, -162);
-    ctx.lineTo(-30 + hs, -167); ctx.lineTo(-24, -200); ctx.lineTo(24, -200); ctx.lineTo(30 + hs, -167);
-    ctx.lineTo(57 + hs*1.6, -162);
-    ctx.quadraticCurveTo(51 + hs*1.3, -168, 50 + hs, -180);
-    ctx.bezierCurveTo(51 + hs*0.5, -198, 54, -224, 40, -240); ctx.closePath(); }, HAIR, 10);
+  outline(() => { ctx.beginPath(); ctx.moveTo(-40, -246);
+    ctx.bezierCurveTo(-51, -234, -51 + hs*0.3, -204, -51 + hs*0.7, -172);
+    ctx.lineTo(-51 + hs, -154); ctx.quadraticCurveTo(hs, -149, 51 + hs, -154);
+    ctx.lineTo(51 + hs*0.7, -172); ctx.bezierCurveTo(51 + hs*0.3, -204, 51, -234, 40, -246); ctx.closePath(); }, HAIR, 10);
   // legs and shoes
   for (const lx of [-22, 4]) outline(() => rr(lx, -88, 18, 84, 6), '#2a2d38', 10);
   for (const lx of [-17, 17]) outline(() => ell(lx, -4, 16, 7), '#151515', 8);
@@ -160,35 +157,37 @@ function shou(x, y, s, o = {}) {
   // front hair: centre parting, curtains framing the face
   ctx.fillStyle = HAIR; ctx.strokeStyle = L; ctx.lineWidth = 4;
   ctx.beginPath(); ctx.moveTo(-37, -214); ctx.bezierCurveTo(-46, -278, 46, -278, 37, -214); ctx.lineTo(32, -214); ctx.bezierCurveTo(30, -236, 18, -247, 0, -244);
-  ctx.bezierCurveTo(-18, -247, -30, -236, -32, -214); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.save(); ctx.clip(); ctx.strokeStyle = '#5b5550'; ctx.lineWidth = 1.8;
-  for (let i = -4; i <= 4; i++) { ctx.beginPath(); ctx.moveTo(i*3, -262); ctx.quadraticCurveTo(i*9 + (i < 0 ? -4 : 4), -252, i*10 + (i < 0 ? -6 : 6), -228); ctx.stroke(); }
-  ctx.restore();
-  for (const sg of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sg*37, -226); ctx.lineTo(sg*30, -226); ctx.lineTo(sg*28, -196); ctx.quadraticCurveTo(sg*34, -192, sg*38, -198); ctx.closePath(); ctx.fillStyle = HAIR; ctx.fill(); ctx.lineWidth = 3.5; ctx.strokeStyle = L; ctx.stroke(); }
+  ctx.bezierCurveTo(-18, -247, -30, -236, -32, -214); ctx.closePath(); ctx.fill(); ctx.stroke();   // one solid sheet over the top, part of the same hair
   // eyes, brows
   const ey = -222;
   for (const ex of [-16, 16]) {
-    if (eyes === 'happy') { ctx.strokeStyle = L; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(ex, ey + 3, 6.5, Math.PI*1.12, Math.PI*1.88); ctx.stroke(); }
+    if (eyes === 'happy') { ell(ex + look[0]*2, ey + 1, 4.6, 2.3); ctx.fillStyle = '#16120f'; ctx.fill(); }   // a narrowed glare (Max, 13 Oct: always angry)
     else if (eyes === 'x') { ctx.strokeStyle = L; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(ex - 5, ey - 5); ctx.lineTo(ex + 5, ey + 5); ctx.moveTo(ex + 5, ey - 5); ctx.lineTo(ex - 5, ey + 5); ctx.stroke(); }
     else { ell(ex + look[0]*2.5, ey + look[1]*2, 3.6, 4.6); ctx.fillStyle = '#16120f'; ctx.fill(); ell(ex + look[0]*2.5 + 1.3, ey + look[1]*2 - 1.6, 1.3, 1.3); ctx.fillStyle = '#fff'; ctx.fill(); }
-    ctx.strokeStyle = L; ctx.lineWidth = 3.2; ctx.beginPath();
-    const up = o.brow === 'up' ? -4 : 0, sgn = ex < 0 ? -1 : 1;
-    ctx.moveTo(ex - 8, ey - 12 + up + (sgn > 0 ? 0 : -1)); ctx.lineTo(ex + 8, ey - 14 + up + (sgn > 0 ? -1 : 0)); ctx.stroke();
   }
-  // nose and the big friendly smile
+  // nose and an angry mouth (Max, 13 Oct): 'grin' gritted teeth in a frown, 'smile' a frown, 'o' a shout, 'oof' a wobbly hurt line
   ctx.strokeStyle = 'rgba(74,47,12,.55)'; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(1, -216); ctx.quadraticCurveTo(5, -208, -1, -206); ctx.stroke();
   ctx.strokeStyle = L;
-  if (mouth === 'o') { ell(0, -194, 6, 7.5); ctx.fillStyle = '#5a1a22'; ctx.fill(); ctx.lineWidth = 2.5; ctx.stroke(); }
+  if (mouth === 'o') { ell(0, -194, 7, 8); ctx.fillStyle = '#5a1a22'; ctx.fill(); ctx.lineWidth = 2.5; ctx.stroke(); }
   else if (mouth === 'oof') { ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-10, -194); for (let i = 1; i <= 4; i++) ctx.lineTo(-10 + i*5, -194 + (i % 2 ? -3 : 3)); ctx.stroke(); }
-  else if (mouth === 'smile') { ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(-13, -198); ctx.quadraticCurveTo(0, -187, 13, -198); ctx.stroke(); }
-  else { ctx.beginPath(); ctx.moveTo(-17, -201); ctx.quadraticCurveTo(0, -178, 17, -201); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-15, -197); ctx.lineTo(15, -197); ctx.lineWidth = 1.2; ctx.stroke(); }
+  else if (mouth === 'smile') { ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(-12, -189); ctx.quadraticCurveTo(0, -199, 12, -189); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.moveTo(-15, -190); ctx.quadraticCurveTo(0, -202, 15, -190); ctx.lineTo(13, -185); ctx.quadraticCurveTo(0, -195, -13, -185); ctx.closePath();
+    ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.stroke();
+    ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-14, -188); ctx.quadraticCurveTo(0, -198.5, 14, -188); for (const tx of [-6, 0, 6]) { ctx.moveTo(tx, -196.5 + Math.abs(tx)*0.12); ctx.lineTo(tx, -190 + Math.abs(tx)*0.2); } ctx.stroke(); }
   // light-grey rectangular metal glasses
   if (glasses) {
     ctx.lineWidth = 3.4; ctx.strokeStyle = '#b4bac4';
     for (const gx of [-29, 5]) { rr(gx, ey - 10, 24, 18, 4); ctx.fillStyle = 'rgba(205,225,245,.28)'; ctx.fill(); ctx.stroke(); }
     ctx.beginPath(); ctx.moveTo(-5, ey - 4); ctx.lineTo(5, ey - 4); ctx.moveTo(-29, ey - 4); ctx.lineTo(-34, ey - 5); ctx.moveTo(29, ey - 4); ctx.lineTo(34, ey - 5); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(-26, ey - 7); ctx.lineTo(-20, ey - 7); ctx.moveTo(8, ey - 7); ctx.lineTo(14, ey - 7); ctx.stroke();
+  }
+  // angry brows, always (Max, 13 Oct: "mr shou should have an angry expression"): drawn over the top of the glasses (the hairline sits
+  // right on the frames), the inner ends pulled down to the nose
+  if (eyes !== 'x') {
+    const up = o.brow === 'up' ? -3 : 0;
+    ctx.strokeStyle = L; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath();
+    for (const sg of [-1, 1]) { ctx.moveTo(sg*25, ey - 13 + up); ctx.lineTo(sg*6, ey - 5 + up); }
+    ctx.stroke();
   }
   ctx.restore();
   // a pile of textbooks held against the hip
@@ -553,7 +552,7 @@ function update(dt) {
     cue('books', 0.15, 'books'); cue('dizzy', 0.9, 'dizzy', {g: 0.6});
     for (let i = 0; i < 3; i++) cue('c' + i, 1.0 + i*0.5, 'tick', {p: 1.2 + i*0.15});
     cue('bell', 2.5, 'ding', {p: 1.1});
-    if (B.winT > (BT.replay ? 3.0 : 5.6)) {
+    if (B.winT > (BT.replay ? 3.0 : 6.2)) {      // Mr Shou's last bubble (in at 3.4 s) holds 2.8 s
       if (window.AUTO) console.log('battle: won at t=' + B.t.toFixed(1) + ' rt=' + B.rt.toFixed(1) + ' hp=' + B.hp + ' deaths=' + BT.deaths + ' stats=' + JSON.stringify(B.stats));
       B.phase = 'done'; GAMES.battle.api.done();
     }

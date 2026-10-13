@@ -17,6 +17,7 @@ const LINES_OCTAGON = {
   turn: 'turn',                             // under the ← → keys on the instruction card
   flip: 'flip',                             // under the ↑ key, on the card and beside the first flip
   red: 'stay on the red',
+  books: 'a book on the path only slows you down',   // the bonk is harmless: no fall, no life (so she never flips over one into the void)
   start: 'press any key to start',
   again: 'Again.',                          // short beat after a fall
   fails: ['Nailong fell. Again.', 'Whoops. Again.', 'Wheee. No. Again.', 'Almost. Again.', 'Gravity, rude. Again.'],
@@ -36,6 +37,7 @@ const OG_FLIP = 0.38;              // seconds in the air for a flip (the real on
 const OG_CARD = 6.0;               // the instruction card stays until a key or a click, or this many seconds
 const OG_M = 1;                    // metres per depth unit
 const OG_SHOW = 9.5, OG_HIT = 4.4; // a thrown book's target shows when its row is this deep ahead, and it lands at this depth
+const OG_FALL = 1.5;               // seconds on a fall before the retry (any key after 0.3 s goes sooner): long enough to read the fail line
 const ogM8 = k => ((k % 8) + 8) % 8;
 const ogRnd = i => { const x = Math.sin(i*91.7 + 47.3)*43758.5453; return x - Math.floor(x); };
 
@@ -48,7 +50,7 @@ const ogRnd = i => { const x = Math.sin(i*91.7 + 47.3)*43758.5453; return x - Ma
 //   B          a textbook lies flat on the path in the next row (bonk)       X r f  Mr Shou punches the cell (row r, face f)
 //   MISS       a book thrown that sails past into the distance              SIDE s Mr Shou on the right (1), left (-1), behind (0)
 // The patterns, in order (each announced by nothing but its look): warm-up; Mr Shou arrives and punches a chute; the barrel roll;
-// textbook stepping stones; the flip ladder; the mirror; book rain; the speed ramp; the last sprint with him right behind.
+// the flip ladder; the mirror; book rain; the speed ramp; the last sprint with him right behind.
 function ogTrack(){
   const rows = [], moves = [], bonks = [], throws = [], spd = [], sides = [], shouts = [];
   let p = 0;
@@ -85,11 +87,9 @@ function ogTrack(){
   S(3.8); MISS();
   for (let i = 0; i < 8; i++) { T(1, 2); G(1); if (i === 4) MISS(); }
   G(3);
-  // 4. textbook stepping stones: a two-lane zigzag paved with Methods books (Year 11 on one lane, Year 12 on the other)
-  S(3.9);
-  { const c = p, kind = f => ogM8(f) === ogM8(c) ? 2 : 3;
-    G(3, [0], kind); for (let i = 0; i < 5; i++) { T(i % 2 ? -1 : 1, 2, [0], kind); G(i === 4 ? 2 : 1, [0], kind); } }
-  G(3); B(); G(3); SIDE(1); G(2);
+  // 4. (the textbook stepping stones, a zigzag paved with Methods books, are cut: Max, 13 Oct, "cut that section where mr shou makes
+  //    a bridge out of the books". The book panels, kinds 2 and 3, are still drawn by ogPanel if a pattern ever uses them.)
+  S(3.9); G(3); B(); G(3); SIDE(1); G(2);
   // 5. the flip ladder: floor, ceiling, floor, ceiling, quicker each time
   S(4.1); MISS();
   F(3); G(2); F(3); G(2); MISS(); F(3); G(1); F(3); G(3);
@@ -497,7 +497,7 @@ function ogStep(dt){
     OG.dead += dt;
     // tell main.js once per fall (it owns the ride's lives and may freeze us with dt = 0), after she has seen him drop
     if (!OG.died && OG.dead >= 0.3) { OG.died = true; const api = GAMES.octagon.api; api && api.died && api.died(); }
-    if (OG.dead > 0.85) ogReset(true);
+    if (OG.dead > OG_FALL) ogReset(true);
     return;
   }
   if (OG.fin >= 0) {
@@ -556,7 +556,7 @@ function ogStep(dt){
 }
 // ---------- the instruction card: what the keys do, in big words, until a key or a click (6 s at most) ----------
 function ogCard(t){
-  const cx = W/2, cy = H*0.33, cw = Math.min(660, W - 40), ch = 320;
+  const cx = W/2, cy = H*0.33, cw = Math.min(660, W - 40), ch = 350;
   const pop = fxBack(clamp(OG.introT/0.35, 0, 1)), out = clamp(OG.intro/0.2, 0, 1);
   ctx.save(); ctx.globalAlpha = out;
   ctx.translate(cx, cy); ctx.scale(pop, pop);
@@ -568,11 +568,13 @@ function ogCard(t){
   title(LINES_OCTAGON.turn, gL, wy, 60); title(LINES_OCTAGON.flip, gR, wy, 60);
   ctx.strokeStyle = 'rgba(74,47,12,.18)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo((gL + gR)/2 + 8, ky - 40); ctx.lineTo((gL + gR)/2 + 8, wy + 20); ctx.stroke();
   title(LINES_OCTAGON.red, 0, 86, 34, '#ef4a52');
-  font(20, 600); ctx.fillStyle = 'rgba(74,47,12,.6)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(LINES_OCTAGON.start, 0, 126);
+  font(22, 600); ctx.fillStyle = C.line; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(LINES_OCTAGON.books, 0, 120);
+  font(20, 600); ctx.fillStyle = 'rgba(74,47,12,.6)';
+  ctx.fillText(LINES_OCTAGON.start, 0, 150);
   const bw = 180, left = clamp(OG.intro/OG_CARD, 0, 1);   // a little bar that runs down, so the wait never feels stuck
-  rr(-bw/2, 142, bw, 6, 3); ctx.fillStyle = 'rgba(74,47,12,.12)'; ctx.fill();
-  rr(-bw/2, 142, bw*left, 6, 3); ctx.fillStyle = '#ef4a52'; ctx.fill();
+  rr(-bw/2, 164, bw, 6, 3); ctx.fillStyle = 'rgba(74,47,12,.12)'; ctx.fill();
+  rr(-bw/2, 164, bw*left, 6, 3); ctx.fillStyle = '#ef4a52'; ctx.fill();
   ctx.restore();
 }
 // ---------- the bonk: stars round his head, the book flipping away, BONK! ----------

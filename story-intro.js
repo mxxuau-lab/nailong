@@ -4,12 +4,14 @@
 // to the falling nai long screaming. that's Nai long. screaming intensifies to bigger letters. Have you got 15min? Yes, Maybe,
 // No. maybe or no, she gets shut down for 10min, come back when you got time... it fades to black, she can't refresh to start
 // the game."
+// Max, 13 Oct: "the 15min has to come after the first bits of dialogue in the game". So the whole opening skit plays first
+// (hi, that's Nailong, the scream, "Nailong, sending you to BCC" and the toss) and the question comes after it.
 // Authored in SCENE seconds (main.js plays clips at 70%: 1 wall second = 0.7 scene seconds). Interactive at the question:
 // main.js routes keys and clicks here (INTRO.key / INTRO.pointer) and calls INTRO.start(onYes) when the step begins.
-// Yes: Max says "Nailong, sending you to BCC" (Max, 12 Oct 21:20): the words in his bubble, then giant letters, B first, C 1.5 s
+// The send-off (after the scream, before the question): Max says "Nailong, sending you to BCC" (Max, 12 Oct 21:20): the words in his bubble, then giant letters, B first, C 1.5 s
 // later, C again 0.2 s after that, each slamming in with a thud and a screen shake. His arms stretch weirdly long across the sky,
-// grab the falling Nailong, reel him in over his head and toss him head first off screen (whoosh, scream), then onYes() (the
-// lives card). The Chinese room clip (sceneChineseA) opens with him crash-landing head first. Maybe / No: "Come back when you've got time...", fade to black, a 10 minute lock
+// grab the falling Nailong, reel him in over his head and toss him head first off screen (whoosh, scream). Then the question.
+// Yes: a hop and a fade to navy, then onYes() (the lives card). The Chinese room clip (sceneChineseA) opens with him crash-landing head first. Maybe / No: "Come back when you've got time...", fade to black, a 10 minute lock
 // kept in localStorage (a refresh still shows it), a sleeping Nailong and a countdown; at 0 she can go back to the question.
 // Test hooks: ?clip=sceneIntro, &answer=yes|maybe|no answers by itself at the question, ?unlock=1 clears the lock.
 // Test runs (?auto=1, ?hold=1, ?sim=) never read or write the stored lock.
@@ -36,17 +38,17 @@ const LINES_INTRO = {
 
 // beats, in scene seconds
 const INTRO_HI = 0.7, INTRO_LOGO = 1.1, INTRO_FALL = 3.0, INTRO_POINT = 4.4, INTRO_LOUD = 6.8, INTRO_Q_T = 9.0;
-const INTRO_DUR = INTRO_Q_T;   // the clip's length up to the question (it then waits for her answer)
-// after her Yes (scene seconds from the pick; 0.7 scene s = 1 real second): his line, the three letters, the long arms, the toss
+const INTRO_DUR = INTRO_Q_T;   // the clip's length up to the send-off (then the toss, then it waits for her answer)
+// the send-off (scene seconds from its start; 0.7 scene s = 1 real second): his line, the three letters, the long arms, the toss, then ask
 const SEND = {say: 0.5, b: 1.4, c1: 1.4 + 1.05, c2: 1.4 + 1.05 + 0.14,     // C lands 1.5 s (real) after B, the second C 0.2 s after that
-  out: 3.75, reach: 3.85, grab: 4.55, pull: 4.8, wind: 5.35, toss: 5.85, star: 6.32, fade: 6.9, end: 7.4};
-const INTRO_SEND_DUR = SEND.end;   // the Yes ending's length in scene seconds (about 10.6 s real)
+  out: 3.75, reach: 3.85, grab: 4.55, pull: 4.8, wind: 5.35, toss: 5.85, star: 6.32, ask: 7.0, end: 7.4};
+const INTRO_SEND_DUR = SEND.ask;   // the send-off's length in scene seconds (about 10 s real) before the question
 const INTRO_LOCK_MIN = 10;     // Maybe or No locks the game this many minutes
 const INTRO_KEY = 'nailong.lock.until';
 
 const INTRO = {
   q: new URLSearchParams(location.search),
-  mode: 'clip', base: 0, sel: 0, pick: -1, at: 0, lockAt: 0, lastT: 0, onYes: null, until: 0, shakeT: -9, lastBeat: -1, readyAt: 0,
+  mode: 'clip', base: 0, sent: false, sendAt: 0, askAt: 0, prevK: -1, sel: 0, pick: -1, at: 0, lockAt: 0, lastT: 0, onYes: null, until: 0, shakeT: -9, lastBeat: -1, readyAt: 0,
   test(){ return this.q.get('auto') === '1' || this.q.get('hold') === '1' || this.q.has('sim'); },
   readLock(){
     if (this.test()) return 0;
@@ -58,7 +60,7 @@ const INTRO = {
   },
   // main.js calls this when the step begins; onYes moves the ride on
   start(onYes){
-    this.onYes = onYes; this.base = 0; this.sel = 0; this.pick = -1; this.at = 0; this.lastT = 0; this.lastBeat = -1; this.readyAt = 0; this.prevT = -1;
+    this.onYes = onYes; this.base = 0; this.sent = false; this.sendAt = 0; this.askAt = 0; this.prevA = -1; this.prevK = -1; this.sel = 0; this.pick = -1; this.at = 0; this.lastT = 0; this.lastBeat = -1; this.readyAt = 0; this.prevT = -1;
     if (this.q.get('unlock') === '1') this.writeLock(0);
     const u = this.readLock();
     if (u > Date.now()) { this.mode = 'lock'; this.until = u; this.lockAt = -99; }   // a refresh during the lock lands straight on it
@@ -68,12 +70,13 @@ const INTRO = {
   answer(i, t){
     if (this.mode !== 'ask') return;
     this.pick = i; this.sel = i; this.at = t;
-    if (i === 0) { this.mode = 'yes'; this.prevA = -1; window.SFX && SFX.play('ding'); }
+    if (i === 0) { this.mode = 'yes'; window.SFX && SFX.play('ding'); }
     else { this.mode = 'no'; window.SFX && SFX.play('sad'); }
     hintEl.textContent = '';
   },
-  // back to the question after the lock (or from ?clip tests): Nailong is still falling
-  reask(t){ this.mode = 'ask'; this.base = t - INTRO_Q_T - 0.6; this.pick = -1; this.sel = 0; this.writeLock(0); hintEl.textContent = LINES_INTRO.choose; },
+  // back to the question after the lock: the skit was seen, so Max stands alone and asks again
+  reask(t){ this.mode = 'ask'; this.base = t - INTRO_Q_T - 30; this.sent = true; this.sendAt = t - SEND.end - 30; this.askAt = t; this.prevA = 99; this.prevK = -1;
+    this.pick = -1; this.sel = 0; this.writeLock(0); hintEl.textContent = LINES_INTRO.choose; },
 
   buttons(){
     const n = 3, gap = 30, w = Math.min(200, (W*0.56 - gap*(n - 1))/n), h = 104, x0 = W*0.69 - (w*n + gap*(n - 1))/2, y = H*0.55;
@@ -86,16 +89,17 @@ const INTRO = {
     this.lastT = t;
     if (this.mode === 'lock') { this.drawLock(t); return; }
     const T = this.lt(t);
-    if (this.mode === 'clip' && T >= INTRO_Q_T) { this.mode = 'ask'; hintEl.textContent = LINES_INTRO.choose; }
+    if (this.mode === 'clip' && T >= INTRO_Q_T) { this.mode = 'send'; this.sent = true; this.sendAt = t; this.prevA = -1; }
+    if (this.mode === 'send' && t - this.sendAt >= SEND.ask) { this.mode = 'ask'; this.askAt = t; hintEl.textContent = LINES_INTRO.choose; }
     if (this.mode === 'ask') {   // test hooks and the bot answer by themselves
       const want = this.q.get('answer') || (window.AUTO ? 'yes' : '');
-      if (want && T >= INTRO_Q_T + 1.0) this.answer(Math.max(0, ['yes', 'maybe', 'no'].indexOf(want)), t);
+      if (want && t - this.askAt >= 1.0) this.answer(Math.max(0, ['yes', 'maybe', 'no'].indexOf(want)), t);
     }
     this.scene(T, t);
-    if (this.mode === 'yes') {
+    if (this.mode === 'yes') {   // a hop, then to navy, the lives card's colour
       const a = t - this.at;
-      if (a > SEND.fade) { ctx.fillStyle = `rgba(29,22,64,${clamp((a - SEND.fade)/(SEND.end - SEND.fade - 0.05), 0, 1)})`; ctx.fillRect(0, 0, W, H); }   // to navy, the lives card's colour
-      if (a > SEND.end) { this.mode = 'done'; const f = this.onYes; if (f) f(); return; }
+      if (a > 0.45) { ctx.fillStyle = `rgba(29,22,64,${clamp((a - 0.45)/0.55, 0, 1)})`; ctx.fillRect(0, 0, W, H); }
+      if (a > 1.05) { this.mode = 'done'; const f = this.onYes; if (f) f(); return; }
     }
     if (this.mode === 'no') {
       const k = clamp((t - this.at - 2.6)/1.0, 0, 1);   // "Come back..." reads for about 3.7 s of real time, then the fade
@@ -111,9 +115,12 @@ const INTRO = {
     const pv = this.prevT == null ? -1 : this.prevT; this.prevT = T;
     const cue = (at, n, o) => { if (pv < at && T >= at && window.SFX) SFX.play(n, o); };
     cue(INTRO_HI, 'pop'); cue(INTRO_LOGO, 'ding', {g: 0.7}); cue(INTRO_FALL - 0.1, 'whoosh', {p: 0.7}); cue(INTRO_POINT, 'pop', {p: 1.1});
-    cue(INTRO_Q_T, 'pop', {p: 0.9}); [0, 1, 2].forEach(i => cue(INTRO_Q_T + 0.25 + i*0.15, 'boing', {p: 1.2 + i*0.15, g: 0.5}));
+    const asking = this.mode === 'ask' || this.mode === 'yes' || this.mode === 'no', ak = asking ? t - this.askAt : -1;
+    const pk = this.prevK; this.prevK = ak;
+    const cueQ = (at, n, o) => { if (pk < at && ak >= at && window.SFX) SFX.play(n, o); };
+    cueQ(0, 'pop', {p: 0.9}); [0, 1, 2].forEach(i => cueQ(0.25 + i*0.15, 'boing', {p: 1.2 + i*0.15, g: 0.5}));
     if (this.mode === 'no') { const a = t - this.at; if (!this.fadeSaid && a > 2.6) { this.fadeSaid = true; window.SFX && SFX.play('whoosh', {p: 0.5}); } } else this.fadeSaid = false;
-    const sa = this.mode === 'yes' ? t - this.at : -1;   // seconds into the send-off (after her Yes)
+    const sa = this.sent ? t - this.sendAt : -1;   // seconds into the send-off (after the scream)
     if (sa >= 0) {
       const pa = this.prevA == null ? -1 : this.prevA; this.prevA = sa;
       const c2 = (at, n, o) => { if (pa < at && sa >= at && window.SFX) SFX.play(n, o); };
@@ -130,7 +137,7 @@ const INTRO = {
     const fallOn = T >= INTRO_FALL, ft = Math.max(0, T - INTRO_FALL);
     // where Nailong is: drops in from above the top, then keeps falling "in place" (the sky rushes up past him)
     const nx = W*0.69 + Math.sin(T*1.3)*14, ny = lerp(-40, H*0.31, ease(clamp(ft/1.3, 0, 1)));
-    const loud = clamp((T - INTRO_LOUD)/1.2, 0, 1), qk = clamp((T - INTRO_Q_T)/0.4, 0, 1);
+    const loud = clamp((T - INTRO_LOUD)/1.2, 0, 1), qk = clamp(ak/0.4, 0, 1);
     ctx.save();
     if (loud > 0 && T < INTRO_Q_T) ctx.translate(...fxShake(0.3 + 0.7*loud*(0.6 + 0.4*Math.sin(T*9)), 9));
     if (sa >= 0) {   // each letter slams the screen
@@ -139,12 +146,14 @@ const INTRO = {
       if (k > 0) ctx.translate(...fxShake(k, amp));
     }
     sky(); sun();
-    const rush = ft*ft*40 + ft*520;   // the far sky streams up once he is falling
+    // the far sky streams up while he is falling, and eases to a stop once he has been thrown away
+    const fr = sa > SEND.toss ? Math.max(0, T - sa + SEND.toss - INTRO_FALL) + 0.35*(1 - Math.exp(-(sa - SEND.toss)*2.5)) : ft;
+    const rush = fr*fr*40 + fr*520;
     for (let i = 0; i < 9; i++) {
       const c = CLOUDS[i], span = H + 260, y = (((i/9)*span + c.x*120 - rush) % span + span) % span - 130;
       cloud(c.x*W, y, c.s*0.8);
     }
-    if (fallOn) {   // speed lines streaming up past him
+    if (fallOn && !(sa > SEND.toss)) {   // speed lines streaming up past him (gone once he is thrown)
       ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 4; ctx.lineCap = 'round';
       for (let i = 0; i < 6; i++) { const lx = nx - 60 + i*24, ly = ny - 30 - ((T*700 + i*137) % 200); ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx, ly - 46); ctx.stroke(); }
       ctx.lineCap = 'butt';
@@ -154,11 +163,13 @@ const INTRO = {
     const wave = T >= INTRO_HI - 0.2 && T < INTRO_POINT - 0.3;
     const point = T >= INTRO_POINT - 0.3 && T < INTRO_Q_T;
     const armR = wave ? -2.55 + Math.sin(T*9)*0.32 : point ? lerp(-0.2, -2.55, ease(clamp((T - INTRO_POINT + 0.3)/0.3, 0, 1))) : 0;
-    const longArms = sa >= SEND.reach;
+    const longArms = sa >= SEND.reach && sa < SEND.end;   // back to his own arms once they have sprung back
     let look = point || (fallOn && T < INTRO_Q_T) ? [0.9, -0.9] : this.mode === 'no' ? [0, 0.6] : [0.3, 0];
     if (sa >= SEND.out) look = sa < SEND.wind ? [0.9, -0.8] : sa < SEND.toss ? [0.2, -1] : [1, -0.4];   // eyes on Nailong, then after him
+    if (asking) look = this.mode === 'no' ? [0, 0.6] : [0.6, 0.1];   // then on her and the buttons
     const mouth = this.mode === 'no' || (loud > 0.3 && T < INTRO_Q_T) || (sa >= SEND.wind && sa < SEND.toss + 0.25) ? 'o' : 'smile';
-    const hop = sa >= 0 && sa < 0.45 ? Math.abs(Math.sin(sa*9))*14 : 0;
+    const ya = this.mode === 'yes' ? t - this.at : -1;
+    const hop = (sa >= 0 && sa < 0.45 ? Math.abs(Math.sin(sa*9))*14 : 0) + (ya >= 0 && ya < 0.45 ? Math.abs(Math.sin(ya*9))*16 : 0);   // a hop as he starts, and a happy one for her Yes
     const lean = this.leanAt(sa);
     ctx.save(); ctx.translate(mx, gy - hop); ctx.rotate(lean); ctx.translate(-mx, -(gy - hop));
     person(mx, gy - hop, ms, CAST.max, {armR: longArms ? 0 : armR, finger: point && !longArms, look, mouth, noArms: longArms});
@@ -191,13 +202,13 @@ const INTRO = {
     else this.sendOff(sa, T, nx, ny, mx, gy - hop, ms, lean);
     ctx.restore();
     // the question and the three buttons
-    if (T >= INTRO_Q_T) {
+    if (asking) {
       const fade = this.mode === 'ask' ? 1 : clamp(1 - (t - this.at - 0.2)/0.35, 0, 1);
       ctx.save(); ctx.globalAlpha = this.mode === 'yes' ? clamp(1 - (t - this.at - 0.3)/0.3, 0, 1) : fade;
       ctx.save(); ctx.translate(W*0.69, H*0.44); const z = fxBack(qk); ctx.scale(z, z); title(LINES_INTRO.question, 0, 0, Math.min(66, W/16)); ctx.restore();
       const bs = this.buttons(), labels = [LINES_INTRO.yes, LINES_INTRO.maybe, LINES_INTRO.no], fills = [C.y, '#e9e3d2', '#e9e3d2'];
       bs.forEach((b, i) => {
-        const app = clamp((T - INTRO_Q_T - 0.25 - i*0.15)/0.35, 0, 1);
+        const app = clamp((ak - 0.25 - i*0.15)/0.35, 0, 1);
         const gone = this.pick >= 0 && i !== this.pick ? clamp((t - this.at)/0.25, 0, 1) : 0;
         if (gone < 1) { ctx.save(); ctx.globalAlpha *= 1 - gone; introBtn(b, labels[i], fills[i], app, this.sel === i && (this.mode === 'ask' || this.pick === i), this.pick === i && t - this.at < 0.15); ctx.restore(); }
       });

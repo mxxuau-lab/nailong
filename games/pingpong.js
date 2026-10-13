@@ -5,8 +5,8 @@
 // The classroom is the backdrop: whiteboard, bamboo plates, pinyin cards, pink and purple trays (see research/ROUND2.md).
 // Rules kept real (Max, 12 Oct: "terribly boring especially if it's wrong"): a serve is tossed up, bounces once on the
 // server's half and then once on the receiver's; a serve that clips the net and lands in is a LET and is served again;
-// every return bounces once on the other half; the serve swaps every 2 points; one match, first to 3 points, win by 2
-// (deuce at 2-2, the serve then swaps every point, like 10-10 in a real game).
+// every return bounces once on the other half; the serve swaps every 2 points; one match, first to 11 points, win by 2
+// (deuce at 10-10, the serve then swaps every point), like a real game (Max, 13 Oct: "it should be a game to 11").
 // EVERY visible line lives here.
 const LINES_PINGPONG = {
   intro: 'PING PONG',                       // the instruction card: title
@@ -14,14 +14,14 @@ const LINES_PINGPONG = {
   move: 'move the bat',                     // card: next to the ← → keys
   spaceKey: 'space',                        // printed on the space bar keycap (card and serve prompt)
   space: 'serve, and smash',                // card: next to the space bar
-  intro2: 'first to 3 points',              // card: the goal
+  intro2: 'first to 11 points',             // card: the goal
   rule: 'win by 2, like the real thing',    // card: under the goal
   go: 'press any key',                      // under the card
   intro3: 'Liu Lao Shi serves',             // her bubble on the very first serve
   serve: ['Zhǔnbèi? Ready?', 'Here it comes, Nai Long.', 'Hǎo. Ready?', 'Eyes on the ball!'],
   yourServe: ['Your serve, Nai Long.', 'Nǐ fāqiú. Your serve.'],   // her bubble when the serve swaps to you
   toServe: 'to serve',                      // next to the space keycap while you hold the ball
-  deuceLiu: 'Píngfēn! Win by two.',         // her bubble at 2-2 and 3-3 (平分, deuce)
+  deuceLiu: 'Píngfēn! Win by two.',         // her bubble at 10-10, 11-11 ... (平分, deuce)
   deuce: 'DEUCE', matchPoint: 'MATCH POINT',  // the tag under the scoreboard
   fault: 'FAULT!', let: 'LET! Serve again.',
   liuPoint: ['Zài lái! Again!', 'Ha ha! One for me.', 'Keep your eye on the ball.', 'Aiya, so close, Nai Long.', 'Wǒ yíng! Just one.'],     // she wins a point
@@ -143,12 +143,18 @@ function liuLaoShi(x, y, s, o = {}) {
 // game state
 // ====================================================================================
 const PP_TL = 2.74, PP_HW = 0.7625, PP_NY = 1.37, PP_NH = 0.1525, PP_BR = 0.055, PP_G = 5.5, PP_CD = 1.8, PP_CAM = 0.9;
-const PP_R = 0.24, PP_AIMK = 0.75, PP_WIN = 3, PP_LIUY = 3.0, PP_REACH = 0.24, PP_YOUY = -0.15;
+const PP_R = 0.3, PP_AIMK = 0.75, PP_WIN = 11, PP_LIUY = 3.0, PP_REACH = 0.24, PP_YOUY = -0.15;
 // pacing (Max, 12 Oct: "slower, like Mr Shou's fight"): the ball, her feet and her reactions run at PP_SLOW of wall time;
 // your bat, the words and the call-outs run at full speed. PP_KEYV = how fast a held arrow key slides the bat (table
 // widths are 1.5), PP_CARD = the longest the instruction card waits for a key, PP_TOSS = the serve toss in seconds.
 const PP_SLOW = 0.72, PP_KEYV = 1.4, PP_CARD = 6, PP_TOSS = 0.55;
-// difficulty: PP_BATV = the fastest Nailong's bat can follow the trackpad (a held key is slower still, PP_KEYV);
+// the end of the match speeds up a little (Max, 13 Oct: "the speed should increase slightly in the last few points"):
+// once either side has PP_RAMP0 + 1 points, the ball and her feet run PP_RAMPK faster per point, at most PP_RAMPN steps
+// (8 = +3.5%, 9 = +7%, 10 and deuce = +10.5%, past 10 = +14%). Early points keep the pace exactly.
+const PP_RAMP0 = 7, PP_RAMPK = 0.035, PP_RAMPN = 4;
+const ppPace = () => PP_SLOW * (1 + PP_RAMPK * clamp(Math.max(PP.score.you, PP.score.liu) - PP_RAMP0, 0, PP_RAMPN));
+// difficulty: PP_BATV is not used since the 11 Oct racquet came back (the bat follows the trackpad at once; a held key slides
+// it at PP_KEYV);
 // her shots: PP_FAST = base chance of a fast deep attack, PP_ERR = base chance she nets it or hits it long,
 // PP_STRAIGHT = chance she plays it back at you instead of away from you
 const PP_BATV = 1.8, PP_FAST = 0.26, PP_ERR = 0.05, PP_STRAIGHT = 0.25;
@@ -166,7 +172,7 @@ function pj(x, y, z) { const k = PPL.F / (y + PP_CD); return [W / 2 + x * k, PPL
 
 function ppReset(full) {
   const keep = full ? {lost: 0, stats: {pts: 0, matches: 0, wins: 0, losses: 0, shots: 0}, keys: {l: false, r: false}}
-                    : {lost: PP.lost, stats: PP.stats, keys: PP.keys};
+                    : {lost: PP.lost, stats: PP.stats, keys: PP.keys, mouse: PP.mouse};
   PP = Object.assign({
     phase: full ? 'card' : 'serve', timer: 0, cardT: 0, score: {you: 0, liu: 0}, t: 0, rally: 0, shots: 0, serveN: 0,
     server: 'liu', toss: -1, wait: 0,
@@ -180,18 +186,18 @@ function ppReset(full) {
   PP.vmax = Math.max(0.4, 0.62 - 0.06 * PP.lost);   // she gets a little slower after every match she wins
   // test hook: ?show=won or ?show=lost freezes the end screens for screenshots
   const sh = PPQ.get('show');
-  if (full && sh === 'won') { PP.score.you = 3; PP.score.liu = 1; PP.phase = 'won'; PP.timer = 9; PP.nl.mood = 'win'; PP.nl.moodT = 9; PP.liu.mood = 'lose'; PP.liu.moodT = 9; PP.say = {text: LINES_PINGPONG.winLiu, t: 99}; PP.over = true; }
+  if (full && sh === 'won') { PP.score.you = 11; PP.score.liu = 7; PP.phase = 'won'; PP.timer = 9; PP.nl.mood = 'win'; PP.nl.moodT = 9; PP.liu.mood = 'lose'; PP.liu.moodT = 9; PP.say = {text: LINES_PINGPONG.winLiu, t: 99}; PP.over = true; }
   if (full && sh === 'lost') { PP.phase = 'again'; PP.timer = 99; PP.say = {text: LINES_PINGPONG.restart[0], t: 99}; }
 }
 
 // ---------- the rules ----------
-// who serves: two serves each, Liu Lao Shi first; from 2-2 (deuce) the serve swaps every point (the real rule at 10-10)
+// who serves: two serves each, Liu Lao Shi first; from 10-10 (deuce) the serve swaps every point (the real rule)
 function ppServerNow() {
   const n = PP.score.you + PP.score.liu, d = 2 * (PP_WIN - 1), k = n < d ? Math.floor(n / 2) : d / 2 + (n - d);
   return k % 2 === 0 ? 'liu' : 'you';
 }
 const ppTied = () => PP.score.you === PP.score.liu && PP.score.you >= PP_WIN - 1;
-// the tag under the scoreboard: DEUCE when tied at 2-2 or later, MATCH POINT when the leader needs one more
+// the tag under the scoreboard: DEUCE when tied at 10-10 or later, MATCH POINT when the leader needs one more
 function ppTag() {
   const s = PP.score;
   if (PP.over || !['serve', 'rally', 'point'].includes(PP.phase)) return null;
@@ -282,16 +288,19 @@ function ppSwing() { const bat = PP.bat; if (bat.cool > 0) return; PP.pow = 0.3;
 function ppPlayerHit() {
   const b = PP.ball, bat = PP.bat, L = PP.liu;
   // where the ball meets the bat aims it (the edge sends it wide), and a bat still sliding pushes it that way
-  let cc = clamp((b.x - bat.x) / PP_R, -1.2, 1.2), mv = clamp(bat.vx / 2, -1, 1);
-  let p = PP.pow > 0 ? 0.9 : clamp(Math.abs(bat.vx) / 3.2, 0, 0.45);
+  // the 11 Oct racquet (Max, 13 Oct: "I liked the original ping pong game"): the swipe of the bat sets the power (a fast flick
+  // is a smash, and so is space or a click), a flick up sends it deeper, where it meets the bat aims it
+  let cc = clamp((b.x - bat.x) / PP_R, -1.2, 1.2), dzc = clamp((b.z - bat.z) / PP_R, -1.2, 1.2), mv = bat.vx, bvz = bat.vz;
+  if (!PP.mouse) { bvz = 0; dzc = 0; }   // on the arrow keys the height moves by itself, so it must not send the ball long
+  let p = clamp(Math.hypot(bat.vx, bvz) / 2.4, 0, 1); if (PP.pow > 0) p = Math.max(p, 0.85);
   if (window.AUTO && !PP.human) {
-    if (PP.dumb) { mv = 0; p = 0.1; cc = 0; }
-    else if (PP.mid) { mv = ppRand(-0.5, 0.5); p = ppRand(0.1, 0.8); cc = ppRand(-1, 1); }
-    else { mv = 0; p = 0.78; const want = L.x > 0 ? -0.6 : 0.6; cc = clamp(want / PP_AIMK, -1, 1); }
+    if (PP.dumb) { mv = 0; bvz = 0; dzc = 0; p = 0.1; cc = 0; }
+    else if (PP.mid) { mv = ppRand(-0.8, 0.8); bvz = ppRand(-0.3, 1.2); dzc = 0; p = ppRand(0.1, 0.8); cc = ppRand(-1, 1); }
+    else { mv = 0; bvz = 0.9; dzc = 0; p = 0.78; const want = L.x > 0 ? -0.6 : 0.6; cc = clamp(want / PP_AIMK, -1, 1); }
   }
-  const tx = clamp(cc * PP_AIMK + mv * 0.2, -0.7, 0.7);
-  const ty = clamp((p > 0.85 ? 2.3 : 2.0) + ppRand(-0.15, 0.15), 1.6, 2.6);
-  ppLaunch(b, tx, ty, lerp(1.05, 0.62, p), false);
+  const tx = clamp(cc * PP_AIMK + mv * 0.1, -0.7, 0.7);
+  const ty = clamp(1.95 + bvz * 0.25 - dzc * 0.22 + (PP.pow > 0 ? -0.1 : 0), 1.5, 2.9);
+  ppLaunch(b, tx, ty, lerp(1.05, 0.6, p), false);
   b.last = 'you'; b.bounces = 0; PP.rally++; PP.shots++; PP.stats.shots++;
   bat.swing = 0.22; PP.nl.sq = 0.2; PP.pow = 0;
   const [sx, sy] = pj(b.x, b.y, b.z); ppFx(sx, sy, 'star', p > 0.6 ? '#ffd21f' : '#fff'); window.SFX && SFX.play('thwack', {p: 1.2});
@@ -302,11 +311,12 @@ function ppLiuHit() {
   const b = PP.ball, L = PP.liu, bat = PP.bat;
   const dx = Math.abs(b.x - L.x);
   // she plays it to the side away from your bat (now and then straight back at you), and attacks with a fast deep
-  // ball more often as you pull ahead and as a rally goes on: the way to beat that is to get back to the middle
+  // ball more often as you pull ahead (the same +12% at 10 points as the old first-to-3 had at 2) and as a rally goes on:
+  // the way to beat that is to get back to the middle
   const away = bat.x > 0.08 ? -1 : bat.x < -0.08 ? 1 : (Math.random() < 0.5 ? -1 : 1);
   let tx = Math.random() < PP_STRAIGHT ? clamp(bat.x * 0.6 + ppRand(-0.2, 0.2), -0.6, 0.6) : away * ppRand(0.2, 0.62);
   let ty = ppRand(0.3, 1.1), T = ppRand(0.85, 1.1), low = false;
-  if (Math.random() < PP_FAST - 0.04 * PP.lost + 0.06 * PP.score.you + 0.07 * Math.max(0, PP.rally - 2)) { T = ppRand(0.55, 0.65); ty = ppRand(0.25, 0.6); tx = away * ppRand(0.4, 0.62); }
+  if (Math.random() < PP_FAST - 0.04 * PP.lost + 0.12 * Math.min(PP.score.you, PP_WIN - 1) / (PP_WIN - 1) + 0.07 * Math.max(0, PP.rally - 2)) { T = ppRand(0.55, 0.65); ty = ppRand(0.25, 0.6); tx = away * ppRand(0.4, 0.62); }
   const pm = PP_ERR + (dx > 0.2 ? 0.12 : 0) + (L.fast ? 0.08 : 0) + 0.07 * Math.max(0, PP.rally - 2);   // she tires in a long rally
   if (Math.random() < pm) { if (Math.random() < 0.5) ty = -0.55; else low = true; }
   ppLaunch(b, tx, ty, T, low);
@@ -395,7 +405,7 @@ function ppStep(h) {
     window.SFX && SFX.play('squeak');   // her shoes on the classroom floor
   }
   // your hit
-  if (b.last === 'liu' && b.bounces === 1 && b.vy < 0 && b.y <= 0.14 && b.y >= -0.3) {
+  if (b.last === 'liu' && b.bounces === 1 && b.vy < 0 && b.y <= 0.14 && b.y >= -0.45) {
     const dx = (b.x - bat.x) / PP_R, dz = (b.z - bat.z) / (PP_R * 1.15);
     if (dx * dx + dz * dz <= 1) { ppPlayerHit(); return; }
   }
@@ -422,7 +432,7 @@ function ppHumanBot(dt) {
   H_.react -= dt; if (H_.react > 0) return;
   const want = PP.pred.x + H_.err;
   if (want < PP.tgt.x - 0.04) PP.keys.l = true; else if (want > PP.tgt.x + 0.04) PP.keys.r = true;
-  if (H_.smash && !H_.pressed && PP.pred.t / PP_SLOW < H_.sT) { H_.pressed = true; ppSwing(); }
+  if (H_.smash && !H_.pressed && PP.pred.t / ppPace() < H_.sT) { H_.pressed = true; ppSwing(); }
 }
 
 // ====================================================================================
@@ -453,7 +463,7 @@ function ppUpdate(dt) {
   if (PP.stop > 0.001) { if (dt >= 0.05) PP.stop = 0; else { PP.stop -= dt; dt = 0; } }
   PP.shake = Math.max(0, PP.shake - dt); PP.netW = Math.max(0, PP.netW - dt);
   PP.t += dt;
-  const sdt = dt * PP_SLOW;
+  const sdt = dt * ppPace();
   if (window.AUTO) { if (PP.human) ppHumanBot(dt); else ppBot(); }
   // the instruction card waits for a key, at most PP_CARD seconds (a bot run skips it after 1.2 s)
   if (PP.phase === 'card') { PP.cardT += dt; if (PP.cardT >= (window.AUTO ? 1.2 : PP_CARD)) ppStart(); }
@@ -461,11 +471,11 @@ function ppUpdate(dt) {
   // (Nailong lifts the bat to where her ball will arrive), so the only job is getting across in time
   const kd = (PP.keys.r ? 1 : 0) - (PP.keys.l ? 1 : 0);
   if (kd && PP.phase !== 'card') PP.tgt.x = clamp(PP.tgt.x + kd * PP_KEYV * dt, -1.0, 1.0);
-  PP.tgt.z = PP.pred ? clamp(PP.pred.z, -0.08, 0.75) : 0.3;
-  const px = bat.x, pz = bat.z;
-  const bx = (clamp(PP.tgt.x, -1.05, 1.05) - bat.x) * Math.min(1, dt * (window.AUTO ? 30 : 24));
-  bat.x += window.AUTO && !PP.human ? bx : clamp(bx, -PP_BATV * dt, PP_BATV * dt);   // a chubby dragon has a top speed (the test bot does not)
-  bat.z += (PP.tgt.z - bat.z) * Math.min(1, dt * 12);
+  // the 11 Oct racquet: on the trackpad the bat goes where the pointer is, across AND up and down, at once; on the arrow
+  // keys (and for the bots) its height follows the ball by itself
+  if (!PP.mouse) PP.tgt.z = PP.pred ? clamp(PP.pred.z, -0.08, 0.75) : 0.3;
+  const px = bat.x, pz = bat.z, f = Math.min(1, dt * (window.AUTO ? 30 : 24));
+  bat.x += (clamp(PP.tgt.x, -1.05, 1.05) - bat.x) * f; bat.z += (clamp(PP.tgt.z, -0.12, 0.85) - bat.z) * f;
   if (dt > 0) { bat.vx = lerp(bat.vx, (bat.x - px) / dt, 0.4); bat.vz = lerp(bat.vz, (bat.z - pz) / dt, 0.4); }
   bat.swing = Math.max(0, bat.swing - dt); bat.cool = Math.max(0, bat.cool - dt); PP.pow = Math.max(0, PP.pow - dt);
   N.sq = Math.max(0, N.sq - dt);
@@ -481,7 +491,7 @@ function ppUpdate(dt) {
   else if (PP.phase === 'again') { PP.timer -= dt; if (PP.timer <= 0) ppRematch(); }
   else if (PP.phase === 'won') { PP.timer -= dt; if (PP.timer <= 0) { ppFinish(); return; } }
   if (PP.phase === 'serve' || PP.phase === 'card' || PP.phase === 'again') ppHoldBall();
-  // physics in small steps, in slowed scene time
+  // physics in small steps, in slowed scene time (a little less slow near the end, ppPace)
   let rem = sdt;
   while (rem > 1e-6) { const h = Math.min(1 / 120, rem); ppStep(h); rem -= h; }
   // where her ball will reach your end, read once a frame (the ring, the bat height and the bots all use it)
@@ -531,10 +541,21 @@ function ppRoom() {
   ctx.fillStyle = '#2b3350'; ctx.textBaseline = 'middle';
   ctx.textAlign = 'left'; ppPyFont(Math.min(34, W / 38), 700); ctx.fillText(LINES_PINGPONG.board1, bx + 24, by + 38);
   font(Math.min(26, W / 50), 600); ctx.fillText(LINES_PINGPONG.board2, bx + 24, by + 74);
+  // a game to 11 needs room for 11+ marks, so they are counted in gates of five (four strokes and one across), 4 gates wide;
+  // a deuce that runs past 20 points writes the number instead
+  const TW = 200;
   ctx.textAlign = 'right'; font(Math.min(24, W / 52), 600);
-  ctx.fillStyle = '#1f8a4c'; ctx.fillText(LINES_PINGPONG.boardYou, bx + bw - 24 - 130, by + 36); ctx.fillStyle = '#b8323a'; ctx.fillText(LINES_PINGPONG.boardLiu, bx + bw - 24 - 130, by + 72);
+  ctx.fillStyle = '#1f8a4c'; ctx.fillText(LINES_PINGPONG.boardYou, bx + bw - 24 - TW - 16, by + 36); ctx.fillStyle = '#b8323a'; ctx.fillText(LINES_PINGPONG.boardLiu, bx + bw - 24 - TW - 16, by + 72);
   const tally = (n, y, col) => { ctx.strokeStyle = col; ctx.lineWidth = 4; ctx.lineCap = 'round';
-    for (let i = 0; i < n; i++) { const x0 = bx + bw - 24 - 110 + i * 26; ctx.beginPath(); ctx.moveTo(x0, y - 15); ctx.lineTo(x0 + 3, y + 15); ctx.stroke(); } ctx.lineCap = 'butt'; };
+    if (n > 20) { ctx.fillStyle = col; ctx.textAlign = 'left'; font(28, 700); ctx.fillText(String(n), bx + bw - 24 - TW, y); ctx.lineCap = 'butt'; return; }
+    for (let i = 0; i < n; i++) {
+      const g = Math.floor(i / 5), j = i % 5, gx = bx + bw - 24 - TW + g * 50;
+      ctx.beginPath();
+      if (j < 4) { const x0 = gx + j * 10; ctx.moveTo(x0, y - 15); ctx.lineTo(x0 + 3, y + 15); }
+      else { ctx.moveTo(gx - 6, y + 11); ctx.lineTo(gx + 39, y - 11); }   // the fifth mark crosses the four
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt'; };
   tally(PP.score.you, by + 36, '#1f8a4c'); tally(PP.score.liu, by + 72, '#b8323a');
   // bamboo plates with painted flowers above the board
   for (const [px, py, r, cut] of [[W * 0.09, 56, 74, true], [W * 0.91, 150, 68, false]]) {
@@ -810,7 +831,7 @@ function ppFrame(t, dt) {
 
 // keys and pointer. The arrows are HELD (keydown in key(), keyup below), so the bat starts at once and stops on release
 // instead of waiting for the Mac's key repeat. The pointer (trackpad) puts the bat across the table where the pointer is.
-function ppPointerTo(x) { PP.tgt.x = (x - W / 2) / PPL.K0; }
+function ppPointerTo(x, y) { PP.mouse = true; PP.tgt.x = (x - W / 2) / PPL.K0; PP.tgt.z = PP_CAM - (y - PPL.hy) / PPL.K0; }
 const ppIsL = k => k === 'ArrowLeft' || k === 'a' || k === 'A', ppIsR = k => k === 'ArrowRight' || k === 'd' || k === 'D';
 addEventListener('keyup', e => { if (!PP.keys) return; if (ppIsL(e.key)) PP.keys.l = false; else if (ppIsR(e.key)) PP.keys.r = false; });
 addEventListener('blur', () => { if (PP.keys) PP.keys.l = PP.keys.r = false; });
@@ -826,7 +847,7 @@ GAMES.pingpong = {
   key(e) {
     const k = e.key;
     if (e.metaKey || e.ctrlKey || e.altKey || ['Shift', 'Meta', 'Control', 'Alt', 'Tab', 'CapsLock', 'Escape'].includes(k)) return;
-    if (ppIsL(k)) PP.keys.l = true; else if (ppIsR(k)) PP.keys.r = true;
+    if (ppIsL(k)) { PP.keys.l = true; PP.mouse = false; } else if (ppIsR(k)) { PP.keys.r = true; PP.mouse = false; }
     if (PP.phase === 'card') { if (PP.cardT > 0.2) ppStart(); return; }     // any key starts the match
     if (e.repeat) return;
     if (PP.phase === 'again') { ppRematch(); return; }                     // impatient: any key skips the rematch beat
@@ -835,7 +856,7 @@ GAMES.pingpong = {
   },
   pointer(kind, x, y) {
     if (window.AUTO) return;
-    if (kind === 'down') { if (PP.phase === 'card') { if (PP.cardT > 0.2) ppStart(); return; } ppPointerTo(x); ppHit(); }
-    else if (kind === 'move' && PP.phase !== 'card') ppPointerTo(x);
+    if (kind === 'down') { if (PP.phase === 'card') { if (PP.cardT > 0.2) ppStart(); return; } ppPointerTo(x, y); ppHit(); }
+    else if (kind === 'move' && PP.phase !== 'card') ppPointerTo(x, y);
   },
 };

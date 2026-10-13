@@ -23,7 +23,9 @@ const LINES_SCHOOL2 = {
     // B: after Tetris
     move: 'Nai Long, move to the front.',                 // Max's words
     ping: 'Can I play ping pong?',                        // Max's words
-    first: 'Hmm. First, this one.',                       // placeholder, Max to edit
+    what: 'What??',                                       // Max's words (Liu Lao Shi, to "Can I play ping pong?")
+    no: 'No!',                                            // Max's words (loud: a thud and a shake)
+    first: 'Maybe after you solve this.',                 // Max's words (after the held pause; then she writes the problem)
     qLabel: 'qǐng xiě pīnyīn',                            // "please write the pinyin"
     q1: '请写拼音：', q2: '乒乓球',                          // 请写拼音：乒乓球 = "Please write the pinyin: ping pong"
     answer: 'pīng pāng qiú',                              // the pinyin of 乒乓球
@@ -72,6 +74,32 @@ function s2Cues(key, t, list){
   const prev = s2CueT[key]; s2CueT[key] = t;
   if (prev === undefined || t <= prev || !window.SFX) return;
   for (const [at, name, o] of list) if (prev < at && t >= at) SFX.play(name, o || {});
+}
+
+// a speech bubble BESIDE a face (side 1 = right of it, -1 = left), its tail pointing sideways at the face, so a line can sit level
+// with a head without covering what is written on the board above it. Same sticker look and 0.2 s pop as bubble() in core.js;
+// age = scene seconds since the line started (clips are pure functions of t). fx, fy = face centre, fr = half its width.
+// A line with a tone mark Fredoka has no glyph for (ě ǎ ǔ ē: they fell back to a heavier system letter mid-word) is set in
+// the pinyin face instead, like the pinyin on the board.
+const S2_TONED = /[Ā-ɏ]/;
+function s2SideBubble(text, fx, fy, fr, side, age, size = 28, maxW = 320){
+  if (S2_TONED.test(text)) s2PyFont(size, 500); else font(size, 600);
+  const words = text.split(' '), lines = []; let cur = '';
+  for (const w of words) { const t2 = cur ? cur + ' ' + w : w; if (ctx.measureText(t2).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t2; }
+  lines.push(cur);
+  const right = side > 0, lh = size*1.2, bw = Math.max(...lines.map(l => ctx.measureText(l).width)) + 36, bh = lines.length*lh + 22;
+  const bx = clamp(right ? fx + fr + 22 : fx - fr - 22 - bw, 10, W - bw - 10), by = clamp(fy - bh/2, 10, H - bh - 10);
+  const tipX = right ? fx + fr + 4 : fx - fr - 4, edge = right ? bx : bx + bw, ty = clamp(fy, by + 18, by + bh - 18);
+  const sc = Math.max(0.01, fxBack(age/0.2));
+  ctx.save(); ctx.translate(tipX, fy); ctx.scale(sc, sc); ctx.translate(-tipX, -fy);
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = C.line; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+  const tail = (w, out) => { ctx.beginPath(); ctx.moveTo(edge, ty - w); ctx.lineTo(tipX + (right ? out : -out), fy); ctx.lineTo(edge, ty + w); ctx.closePath(); };
+  tail(11, 0); ctx.fill(); ctx.stroke();
+  rr(bx, by, bw, bh, 18); ctx.fill(); ctx.stroke();
+  tail(8, 5); ctx.save(); ctx.translate(right ? 3 : -3, 0); ctx.fill(); ctx.restore();   // white over the bubble's edge, so the tail joins it
+  ctx.fillStyle = C.line; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  lines.forEach((l, i) => ctx.fillText(l, bx + bw/2, by + 11 + lh*(i + .5)));
+  ctx.restore();
 }
 
 // Nailong with an optional painter that draws in HIS local space (head, eyes, cheeks) on top of the body
@@ -209,7 +237,7 @@ function s2Problem(R, t, T = S2_PROB_OLD){
   }
   const a = s2Tw(t, T.a[0], T.a[1]);
   if (a > 0) {
-    const ax = bx + bw*0.62, ay = by + bh*0.76; s2PyFont(Math.min(46, W*0.036));
+    const ax = bx + bw*0.62, ay = by + bh*0.71; s2PyFont(Math.min(46, W*0.036));   // 0.71: the p, g and q tails clear Liu Lao Shi's hair
     ctx.save(); ctx.beginPath(); ctx.rect(ax - 190, by, 380*ease(a), bh); ctx.clip();
     ctx.fillStyle = '#1f8a4c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(L.answer, ax, ay);
     ctx.restore();
@@ -345,6 +373,32 @@ function s2FrontRow(){
   ctx.restore();
   [0.315, 0.405].forEach(f => s2Fan(W*f, H*0.675, 84, 64));    // empty: nobody sits in the front row (drawn after her: she is behind it)
 }
+// the second row's lime chairs, behind Nailong and Jed (Max, 13 Oct: "they aren't sitting on chairs"); drawn before them
+function s2BackChairs(){
+  const S = s2Seat();
+  s2Fan(S.nx, S.ny - 128, 150, 100);
+  s2Fan(S.jx, S.jy - 158, 140, 96);
+}
+// Jed's phone in close-up (Max, 13 Oct: "we can't actually see what Jed's doing from that angle"): a white comic panel up on
+// the right with the phone big inside it, dashed lines back to the real phone (tip = its centre), so the Tetris is readable.
+// k 0..1 pops it in, a fades it.
+function s2Closeup(tip, k, a, rows, fast, rot){
+  if (k <= 0.001 || a <= 0.001) return;
+  const cx = W*0.625, cy = H*0.385, pw = 222, ph = 312, sc = fxBack(k), psc = 0.4;
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.setLineDash([10, 8]); ctx.lineCap = 'round';
+  for (const [dx, dy] of [[-pw/2, ph/2 - 20], [-pw/2, -ph/2 + 20]]) {
+    for (const [col, lw] of [[C.line, 7], ['#fff', 3]]) { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(tip[0], tip[1]); ctx.lineTo(cx + dx*sc, cy + dy*sc); ctx.stroke(); }
+  }
+  ctx.setLineDash([]);
+  ctx.translate(cx, cy); ctx.scale(sc, sc);
+  ctx.fillStyle = 'rgba(29,22,64,.35)'; rr(-pw/2 + 8, -ph/2 + 10, pw, ph, 22); ctx.fill();
+  ctx.fillStyle = '#fff'; rr(-pw/2, -ph/2, pw, ph, 22); ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = C.line; ctx.stroke();
+  ctx.restore();
+  ctx.save(); ctx.globalAlpha = a; ctx.translate(cx, cy); ctx.scale(sc, sc); ctx.translate(-cx, -cy);
+  s2Phone(cx, cy, psc, rot, rows, fast);
+  ctx.restore();
+}
 function s2BackDesk(){
   const top = H*0.80, x0 = W*0.035, x1 = W*0.36;
   ctx.save(); ctx.strokeStyle = '#3a3f4f'; ctx.lineWidth = 6; ctx.lineCap = 'round';
@@ -390,7 +444,9 @@ const S2_TCOL = {I: '#5ad2f0', O: '#FFD21F', T: '#b072e0', S: '#6cc24a', Z: '#e8
 const S2_STACK = ['J......S.I', 'JJJ..TSS.I', 'OO.LTTTSZI', 'OOLLL.ZZ.I'];      // the bottom four rows of Jed's game
 const S2_FALL = [['T', [[0, 0], [-1, 1], [0, 1], [1, 1]], 4], ['S', [[0, 0], [1, 0], [-1, 1], [0, 1]], 6], ['L', [[1, 0], [-1, 1], [0, 1], [1, 1]], 2],
                  ['I', [[-1, 1], [0, 1], [1, 1], [2, 1]], 4], ['Z', [[-1, 0], [0, 0], [0, 1], [1, 1]], 6], ['O', [[0, 0], [1, 0], [0, 1], [1, 1]], 3]];
-const S2_CYC = 18;                                   // rows per piece: 16 rows from above the board onto the stack, then a rest of 2
+// the half-height well (games/tetris.js, Max 13 Oct: "half the amount of space"): 10 rows; the stack fills rows 6 to 9
+const S2_VIS = 10, S2_TOP = S2_VIS - 6, S2_LAND = S2_TOP + 2;
+const S2_CYC = S2_LAND + 2;                          // rows per piece: from above the board onto the stack, then a rest of 2
 function s2Tile(x, y, cs, col, lw){
   const p = cs*0.06;
   rr(x + p, y + p, cs - 2*p, cs - 2*p, cs*0.22); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = lw; ctx.strokeStyle = C.line; ctx.stroke();
@@ -401,7 +457,7 @@ function s2Tile(x, y, cs, col, lw){
 function s2Phone(cx, cy, sc, rot, rows, fast){
   const L = LINES_SCHOOL2.chinese, PW = 470, PH = H - 46, k = v => Math.max(v, 2.4/sc);   // outlines never thinner than ~2.4 px
   const PX = -PW/2, PY = -PH/2, SX = PX + 14, SY = PY + 14, SW = PW - 28;
-  const CS = 28, BW = CS*10, BH = CS*20, BX = -BW/2, BY = SY + 36, colW = BX - SX - 16, LX = SX + 8, RX = BX + BW + 8;
+  const CS = 30, BW = CS*10, BH = CS*S2_VIS, BX = -BW/2, BY = SY + 36, colW = BX - SX - 16, LX = SX + 8, RX = BX + BW + 8;
   ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot); ctx.scale(sc, sc); ctx.lineJoin = 'round';
   ctx.lineWidth = k(4); ctx.strokeStyle = C.line; ctx.fillStyle = '#2f5a8a';
   rr(PX - 7, PY + 130, 12, 46, 4); ctx.fill(); ctx.stroke(); rr(PX - 7, PY + 186, 12, 46, 4); ctx.fill(); ctx.stroke();
@@ -419,21 +475,22 @@ function s2Phone(cx, cy, sc, rot, rows, fast){
   rr(LX, BY + 24, colW, 72, 12); ctx.fill(); ctx.stroke(); rr(RX, BY + 24, colW, 5*50 + 14, 12); ctx.fill(); ctx.stroke();
   ctx.fillStyle = '#120d2e'; rr(BX - 5, BY - 5, BW + 10, BH + 10, 8); ctx.fill(); ctx.lineWidth = k(4); ctx.strokeStyle = '#4b4380'; ctx.stroke();
   const tl = k(2.8);
-  S2_STACK.forEach((row, i) => { for (let c = 0; c < 10; c++) if (row[c] !== '.') s2Tile(BX + c*CS, BY + (16 + i)*CS, CS, S2_TCOL[row[c]], tl); });
+  S2_STACK.forEach((row, i) => { for (let c = 0; c < 10; c++) if (row[c] !== '.') s2Tile(BX + c*CS, BY + (S2_VIS - 4 + i)*CS, CS, S2_TCOL[row[c]], tl); });
   const n = Math.floor(rows/S2_CYC), q = rows - n*S2_CYC, [type, cells, col] = S2_FALL[n % S2_FALL.length];
-  const top = Math.min(Math.floor(q) - 2, 14), dxs = cells.map(c => c[0]);
+  const top = Math.min(Math.floor(q) - 2, S2_TOP), dxs = cells.map(c => c[0]);
   ctx.save(); ctx.beginPath(); ctx.rect(BX - 2, BY, BW + 4, BH + 2); ctx.clip();
   if (fast && top > 0) { ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(BX + (col + Math.min(...dxs))*CS, BY, (Math.max(...dxs) - Math.min(...dxs) + 1)*CS, (top + 1)*CS); }
   for (const [dx, dy] of cells) s2Tile(BX + (col + dx)*CS, BY + (top + dy)*CS, CS, S2_TCOL[type], tl);
   ctx.restore();
   for (let i = 0; i < 3; i++) { const [nt, nc] = S2_FALL[(n + 1 + i) % S2_FALL.length]; for (const [dx, dy] of nc) s2Tile(RX + colW/2 - 6 + dx*12, BY + 44 + i*50 + dy*12, 12, S2_TCOL[nt], k(1.6)); }
   ctx.fillStyle = 'rgba(255,255,255,.12)'; rr(BX, BY + BH + 12, BW, 30, 15); ctx.fill(); ctx.lineWidth = k(3); ctx.strokeStyle = C.line; ctx.stroke();
+  if (typeof tPad === 'function') tPad(SX, BY + BH + 42, SW, SY + PH - 28 - (BY + BH + 42));   // the phone's buttons, as in the game
   ctx.restore();
 }
 // the moments a piece lands in Jed's game (a soft tick each), worked out once
 function s2Lands(rowsAt, t0, t1){
-  const out = []; let prev = Math.floor((rowsAt(t0) - 16)/S2_CYC);
-  for (let t = t0; t <= t1; t += 0.004) { const k = Math.floor((rowsAt(t) - 16)/S2_CYC); if (k !== prev) out.push(t); prev = k; }
+  const out = []; let prev = Math.floor((rowsAt(t0) - S2_LAND)/S2_CYC);
+  for (let t = t0; t <= t1; t += 0.004) { const k = Math.floor((rowsAt(t) - S2_LAND)/S2_CYC); if (k !== prev) out.push(t); prev = k; }
   return out;
 }
 
@@ -443,9 +500,9 @@ function s2Lands(rowsAt, t0, t1){
 // Max: "With tetris, Nai long starts off telling Jed it's easy, and then Jed says, oh, do you want to try Nailong? and when Nailong
 // gets it suddenly it speeds up a lot. WHYS IT SO FAST!!??" "Nai long sees Jed playing tetris."
 const CH_A = {fly: 0.45, land: 1.5, pop: 2.6, sit: 2.95, dizzyEnd: 4.2,
-              see: 4.7, easy: 5.4, easyEnd: 7.5, jed: 7.8, offer: 8.9, jedEnd: 10.0, take: 10.0, grab: 10.5, fast: 11.5, why: 11.8, zoom: 14.1};
-const CH_A_DUR = 15.5;                                      // scene seconds (22.1 s real)
-const S2_GSLOW = 0.12, S2_GFAST = 0.014;                   // Jed's game: seconds per row, then the sudden speed-up
+              see: 4.7, easy: 5.4, easyEnd: 7.5, jed: 7.8, offer: 8.9, jedEnd: 10.2, take: 10.2, grab: 10.7, fast: 11.7, why: 12.0, zoom: 14.3};
+const CH_A_DUR = 15.7;                                      // scene seconds (22.4 s real); Jed's offer stays up 3.3 s real
+const S2_GSLOW = 0.12, S2_GFAST = 0.03;                    // Jed's game: seconds per row, then the sudden speed-up
 const s2RowsA = t => 9 + (t < CH_A.fast ? t/S2_GSLOW : CH_A.fast/S2_GSLOW + (t - CH_A.fast)/S2_GFAST);
 const CH_A_SFX = [
   [0.15, 'squeak', {g: 0.45}], [1.95, 'squeak', {g: 0.4}], [3.3, 'squeak', {g: 0.45}],                     // her marker: she never stops writing
@@ -529,6 +586,7 @@ function sceneChineseA(t){
     s2Note(S.lx + 50 + i*30, S.ly - 280*S.ls - a*60, 0.75, 0.2*i); ctx.restore();
   }
   s2FrontRow();
+  s2BackChairs();
   // ---- Nailong ----
   let x = S.nx, y = S.ny, s = S.ns, sx = 1, sy = 1 + Math.sin(t*2)*0.015, rot = 0, face = null, here = true;
   const o = {mouth: 'smile', arms: 'down', look: [Math.sin(t*1.3)*0.7, -0.4 + Math.sin(t*0.8)*0.3]};
@@ -600,6 +658,8 @@ function sceneChineseA(t){
     const [tx, ty] = F.at(Math.max(F.k - 0.2, -0.3)), n = 5 + Math.floor(F.k*14);
     ctx.save(); ctx.globalAlpha = t < A.land ? 1 : 1 - (t - A.land)/0.12; title(L.scream.slice(0, n), tx, ty, lerp(70, 38, F.k), '#fff'); ctx.restore();
   }
+  // the close-up of Jed's game, under the bubbles: from when Nailong spots it until the zoom takes over
+  s2Closeup(ph, ease(s2Tw(t, A.see + 0.1, A.see + 0.4)), 1 - ease(s2Tw(t, A.zoom, A.zoom + 0.3)), s2RowsA(t), fast, prot*0.5);
   // speech (the bubbles are gone before the zoom starts)
   const nTop = y - 190*s*sy, jTop = S.jy - 272*S.js - 8;
   if (t > A.easy && t < A.easyEnd) bubble(L.easy, x + 10, nTop, 30, 300);
@@ -613,9 +673,12 @@ function sceneChineseA(t){
 }
 
 // ---------- clip B: she noticed. "move to the front", the sad walk, a pause, ping pong?, the hard problem (into games/pingpong.js) ----------
-const CH_B = {notice: 0.7, move: 1.2, bang: 1.3, give: 1.9, moveEnd: 3.4, up: 3.4, walk: 3.7, arrive: 5.9, ping: 7.7, slip: 9.0, pingEnd: 9.8,
-              first: 9.9, firstEnd: 12.0, think: 12.0, squash: 14.3, got: 14.6, gotEnd: 16.5, down: 15.6, climb: 15.9, praise: 16.6};
-const CH_B_DUR = 19.2;                                      // scene seconds (27.4 s real)
+// Max, 13 Oct: "Liu lao shi first says, What?? then No!. and after she says no loudly she waits, maybe after you solve this."
+// what 1.7 s real, No! 1.7 s (thud, shake), the held pause 1.6 s, "Maybe after you solve this." 3.0 s while she writes the problem
+const CH_B = {notice: 0.7, move: 1.2, bang: 1.3, give: 1.9, moveEnd: 3.4, up: 3.4, walk: 3.7, arrive: 5.9, ping: 7.7, pingEnd: 9.6,
+              what: 9.8, slip: 9.8, whatEnd: 11.0, no: 11.2, noEnd: 12.4,
+              first: 13.5, firstEnd: 15.6, think: 15.6, squash: 17.9, got: 18.2, gotEnd: 20.1, down: 19.2, climb: 19.5, praise: 20.2};
+const CH_B_DUR = 22.8;                                      // scene seconds (32.6 s real)
 // the pause Max asked for: the rain cloud is full at arrive + 0.7, "Can I play ping pong?" comes at ping (1.1 scene s = 1.6 s real later)
 const S2_PROB_B = {q: [CH_B.first + 0.1, CH_B.first + 1.0], a: [CH_B.got + 0.4, CH_B.got + 1.2], s: [CH_B.got + 1.0, CH_B.got + 1.9]};
 const s2RowsB = t => 4 + t/S2_GSLOW;
@@ -624,13 +687,17 @@ const CH_B_SFX = [
   [CH_B.bang, 'boing', {p: 1.2}], [CH_B.give, 'zip'], [CH_B.give + 0.4, 'tick', {p: 1.4, g: 0.5}],
   [CH_B.up, 'swish', {p: 0.6}],                                                       // his chair scrapes back
   ...[0, 1, 2, 3, 4, 5, 6].map(i => [CH_B.walk + 0.15 + i*0.31, 'tick', {p: 0.8, g: 0.45}]),   // footsteps
-  [CH_B.arrive + 0.05, 'sad'], [CH_B.slip, 'clink', {p: 1.4, g: 0.6}],
+  [CH_B.arrive + 0.05, 'sad'], [CH_B.what, 'boing', {p: 1.5, g: 0.7}], [CH_B.slip + 0.1, 'clink', {p: 1.4, g: 0.6}],
+  [CH_B.no, 'thud', {p: 0.8}], [CH_B.no + 0.03, 'buzz', {p: 0.7, g: 0.5}],                                      // NO!
   [CH_B.first + 0.1, 'squeak', {g: 0.5}], [CH_B.first + 0.55, 'squeak', {p: 1.1, g: 0.5}],
   [CH_B.think + 0.05, 'dizzy'], [CH_B.got, 'boing'], [CH_B.got + 0.4, 'squeak', {p: 1.2, g: 0.5}], [CH_B.got + 1.0, 'ding'],
   ...[2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => [CH_B.climb + i*Math.PI/10, 'tick', {p: 1.2, g: 0.35}]),   // each hop lands
   [CH_B.praise - 0.1, 'swish', {p: 1.4}],                                             // out comes the bat
 ];
 function sceneChineseB(t){
+  const nk = t - CH_B.no, shake = nk > 0 && nk < 0.45 ? Math.sin(t*80)*9*(1 - nk/0.45) : 0;   // the room shakes at her NO!
+  ctx.save();
+  if (shake) { ctx.fillStyle = '#ecebe6'; ctx.fillRect(0, 0, W, H*0.70); ctx.fillStyle = '#585d70'; ctx.fillRect(0, H*0.70, W, H*0.30); ctx.translate(shake, shake*0.4); }
   const L = LINES_SCHOOL2.chinese, S = s2Seat(), B = CH_B, R = s2Room(t);
   s2Cues('chB', t, CH_B_SFX);
   s2Problem(R, t, S2_PROB_B);
@@ -655,6 +722,8 @@ function sceneChineseB(t){
       sad = true; tears = t > B.arrive + 0.4; sy = 0.92 + Math.sin(t*1.6)*0.01; sx = 1.04; o.look = [0, 1];
       if (t < B.arrive + 0.4) sy -= 0.04*s2Pulse(t, B.arrive, B.arrive + 0.4);
       if (t > B.ping && t < B.pingEnd) { o.look = [-0.9, -0.3]; o.mouth = 'o'; }
+      if (t > B.what && t < B.first) { o.look = [-0.9, -0.3]; o.mouth = 'o'; }
+      if (t > B.no && t < B.no + 0.45) { const q = s2Pulse(t, B.no, B.no + 0.45); sy -= 0.12*q; sx += 0.08*q; }   // he flinches at the NO!
       if (t > B.first) o.look = [-0.4, -0.6];
     } else if (t < B.got) {                                  // thinking hard
       think = true; o.mouth = 'o'; sy = 1 + 0.07*Math.sin(t*9); sx = 1 - 0.04*Math.sin(t*9); rot = Math.sin(t*2.2)*0.08;
@@ -679,13 +748,18 @@ function sceneChineseB(t){
     if (t < B.move) lo.mouth = 'o';
     else { lo.aR = lerp(0.2, 1.5, ease(s2Tw(t, B.move, B.move + 0.3))); lo.mouth = t < B.moveEnd - 0.4 ? talk() : 'smile'; }   // points at the spot beside her
   } else if (t < B.ping) { lo.aR = lerp(1.5, 0.2, ease(s2Tw(t, B.up, B.up + 0.4))); lo.look = [clamp((x - S.lx)/160, -1, 0.9), 0.25]; }
-  else if (t < B.first) { lo.look = [0.9, 0.3]; lo.mouth = t > B.slip - 0.1 ? 'o' : 'smile'; lo.slip = ease(s2Tw(t, B.slip, B.slip + 0.3)); lo.pony += t > B.slip ? 0.15 : 0; }
+  else if (t < B.what) { lo.look = [0.9, 0.3]; }                                                         // listening
+  else if (t < B.no) { lo.look = [0.9, 0.2]; lo.mouth = 'o'; lo.slip = ease(s2Tw(t, B.slip, B.slip + 0.3)); lo.pony += 0.15; lo.aL = lo.aR = 0.5*s2Pulse(t, B.what, B.what + 0.5); }   // What??
+  else if (t < B.noEnd) { const q = s2Pulse(t, B.no, B.no + 0.35); lo.look = [0.9, 0.3]; lo.mouth = t < B.no + 0.9 ? 'open' : 'flat'; lo.slip = 1;   // NO!
+    lo.aL = lo.aR = 0.25 + 0.5*q; lo.sy = 1 + 0.08*q; lo.pony += 0.3*q; }
+  else if (t < B.first) { lo.look = [0.9, 0.3]; lo.mouth = 'flat'; lo.slip = 1 - ease(s2Tw(t, B.first - 0.5, B.first)); lo.aL = lo.aR = 0.55; }   // the held pause
   else if (t < B.first + 1.1) { lo.aR = 2.4 + Math.sin(t*14)*0.18; lo.look = [0.8, -0.5]; lo.slip = 0.2*(1 - s2Tw(t, B.first, B.first + 0.2)); lo.mouth = talk(); }
   else if (t < B.got) { lo.aL = 0.55; lo.aR = 0.55; lo.look = [0.9, 0.3]; lo.mouth = t < B.firstEnd - 0.3 ? talk() : 'flat'; }
   else if (t < B.praise - 0.3) { lo.mouth = 'o'; lo.slip = 1; lo.look = [0.8, -0.4]; lo.aR = 0.5; lo.aL = 0.4; lo.sy = 1 + 0.03*Math.sin(t*20); }
   else { lo.mouth = talk(); lo.aL = lerp(2.9, 0.7, ease(s2Tw(t, B.praise - 0.2, B.praise + 0.5))); lo.aR = 0.15; lo.look = [0.4, 0]; lo.marker = false; lo.bat = t > B.praise; }
   liuLaoShi(S.lx, S.ly, S.ls, lo);
   s2FrontRow();
+  s2BackChairs();
 
   s2NL(x, y, s, Object.assign(o, {sx, sy, rot}), sad ? s2SadFace : think ? s2ThinkBrows : null);
   if (tears) {
@@ -724,19 +798,23 @@ function sceneChineseB(t){
   fxMark('bang', S.nx + 55*S.ns, S.ny - 200*S.ns, s2Tw(t, B.bang, B.bang + 0.6));   // anime "!" when she calls him (Nichijou)
 
   // ---- speech ----
-  const lTop = S.ly - 268*S.ls, nTop = y - 188*s*sy;
+  // her lines once the question is up, and his "got it", sit BESIDE the face (above it they covered 乒乓球 and the green answer)
+  const lTop = S.ly - 268*S.ls, nTop = y - 188*s*sy, lFace = [S.lx, S.ly - 218*S.ls, 44*S.ls - 6], nFace = [x, y - 130*s*sy, 45*s*sx];
   if (t > B.move && t < B.moveEnd) bubble(L.move, S.lx, lTop, 30, 330);
   if (t > B.ping && t < B.pingEnd) bubble(L.ping, x + 30, nTop, 28, 250);
-  if (t > B.first && t < B.firstEnd) bubble(L.first, S.lx, lTop, 28, 300);
-  if (t > B.got && t < B.gotEnd) bubble(L.got, x + 70, nTop - 10, 30, 300);
-  if (t > B.praise) bubble(L.praise, S.lx - 40, lTop, 28, 270);
+  if (t > B.what && t < B.whatEnd) bubble(L.what, S.lx, lTop, 32, 300);
+  if (t > B.no && t < B.noEnd) bubble(L.no, S.lx, lTop - 6, Math.round(64*(1 + 0.25*s2Pulse(t, B.no, B.no + 0.3))), 300);   // big and loud
+  if (t > B.first && t < B.firstEnd) s2SideBubble(L.first, lFace[0], lFace[1] - 14, lFace[2], -1, t - B.first, 26, 360);
+  if (t > B.got && t < B.gotEnd) s2SideBubble(L.got, nFace[0], nFace[1], nFace[2], 1, t - B.got, 28, 300);
+  if (t > B.praise) s2SideBubble(L.praise, lFace[0], lFace[1] - 14, lFace[2], -1, t - B.praise, 26, 380);
+  ctx.restore();
 }
 
 // ---------- clip C: after ping pong, out of the Chinese room. Max, 12 Oct: "and then we have nai long coming out "What a fun and nice
 // teacher" and then Mr. Shou next providing a stark contrast." The corridor outside her door: he skips out, turns, waves back into
 // the room (she waves back through the door), says it, and hops off to the right, towards the cafe (sceneCafe1). ----------
-const CH_OUT = {out: 0.15, step: 1.0, turn: 1.0, wave: 1.15, say: 1.2, sayEnd: 3.15, go: 3.0};
-const CH_OUT_DUR = 3.7;                                     // scene seconds (5.3 s real)
+const CH_OUT = {out: 0.15, step: 1.0, turn: 1.0, wave: 1.15, say: 1.2, sayEnd: 3.4, go: 3.25};   // the line stays 3.1 s real
+const CH_OUT_DUR = 3.95;                                    // scene seconds (5.6 s real)
 const CH_OUT_SFX = [
   [0.05, 'door'], ...[0, 1, 2].map(i => [CH_OUT.out + 0.25 + i*0.28, 'tick', {p: 0.9, g: 0.45}]),          // out the door, three steps
   [CH_OUT.say, 'pop', {p: 1.1}], [CH_OUT.say + 0.15, 'ding', {p: 1.3, g: 0.5}], [CH_OUT.wave + 0.2, 'swish', {p: 1.5, g: 0.35}],
@@ -823,7 +901,7 @@ function sceneChineseOut(t){
   // hearts float up while he says it
   if (t > E.wave) for (let i = 0; i < 3; i++) { const a = ((t - E.wave)*0.7 + i/3) % 1;
     ctx.save(); ctx.globalAlpha = (1 - a)*Math.min(1, (t - E.wave)/0.3); s2Heart(x + 112 + i*26 + Math.sin(a*8 + i)*8, y - 110 - a*130, 12 + 3*i, Math.sin(a*6)*0.3); ctx.restore(); }
-  if (t > E.say && t < E.sayEnd) bubble(L.nice, x - 60, y - 195*s*sy, 32, 330);
+  if (t > E.say && t < E.sayEnd) bubble(L.nice, x + 50, y - 195*s*sy, 32, 280);   // to his right, over the lockers: her wave in the door stays in view
 }
 
 // ---------- clip 2: funny faces (9.6 s) ----------
@@ -959,32 +1037,102 @@ function s2Shelves(dark, shake, signSwing){
   font(18); ctx.fillStyle = C.line; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINES_SCHOOL2.llc.sign, 95, 44);
   ctx.restore();
 }
-// the library window on the right wall: daylight outside, gum tree, and Crony's grey Camry parked on the road (camry() from story-canberra.js)
-function s2LlcWin(){ return {x: W*0.615, y: 66, w: W*0.315, h: 300}; }
-function s2LlcWindow(R, broken){
-  const {x, y, w, h} = R, gy2 = y + h*0.66;
-  ctx.save(); ctx.lineJoin = 'round';
-  ctx.fillStyle = '#e8e2d6'; rr(x - 16, y - 16, w + 32, h + 32, 8); ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = C.line; ctx.stroke();
-  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-  ctx.fillStyle = '#9fd8f2'; ctx.fillRect(x, y, w, h);
-  cloud(x + w*0.3, y + 50, 0.5); cloud(x + w*0.82, y + 34, 0.32);
-  gum(x + w*0.1, gy2 + 4, 0.62);
-  ctx.fillStyle = C.grass; ctx.fillRect(x, gy2, w, h); ctx.fillStyle = '#74b84c'; ctx.fillRect(x, gy2, w, 6);
-  ctx.fillStyle = '#c7c3b8'; ctx.fillRect(x, gy2 + 34, w, 7); ctx.fillStyle = '#6b6f7a'; ctx.fillRect(x, gy2 + 41, w, h);
-  if (typeof camry === 'function') camry(x + w*0.6, gy2 + 84, 0.42, {});
-  if (!broken) {                                            // the glass: two white reflection streaks
-    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 12; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(x + w*0.08, y + h*0.62); ctx.lineTo(x + w*0.26, y + h*0.12); ctx.moveTo(x + w*0.2, y + h*0.66); ctx.lineTo(x + w*0.34, y + h*0.28); ctx.stroke();
-  } else {                                                  // what is left of it: jagged bits in the corners
-    ctx.fillStyle = 'rgba(205,236,250,.85)'; ctx.strokeStyle = C.line; ctx.lineWidth = 3;
-    for (const [px, py, a, b] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
-      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + a*w*0.16, py); ctx.lineTo(px + a*w*0.05, py + b*h*0.08); ctx.lineTo(px + a*w*0.07, py + b*h*0.2); ctx.lineTo(px, py + b*h*0.13); ctx.closePath(); ctx.fill(); ctx.stroke();
-    }
-  }
+// ---------- the LLC library as it really is (Max's photo, private-refs/llc-library-inside.jpg): white ceiling tiles with light
+// panels, a long window wall with bunting, green fields, gum trees and hills outside, a low cabinet under the windows with
+// books standing face out, a white table with green plastic chairs, a wooden book trolley, dark carpet. The pane he jumps
+// through is R (s2LlcWin); Crony's grey Camry is parked on the road outside it (camry() from story-canberra.js). ----------
+function s2LlcWin(){ return {x: W*0.58, y: H*0.165, w: W*0.30, h: H*0.355}; }
+const s2LlcCar = R => [R.x + R.w*0.6, R.y + R.h*0.58 + 84];                  // where the Camry stands (the glint uses it)
+const S2_BUNT = ['#f2a7b5', '#f7d774', '#9fd3e8', '#b9e0a5', '#d7b9f0'];
+function s2Library(shake, signSwing, broken, R){
+  const ceilB = H*0.13, winT = R.y, winB = R.y + R.h, grassY = winT + R.h*0.58, cabT = H*0.555, cabB = H*0.655;
+  ctx.fillStyle = '#e9ebee'; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.translate(shake, 0); ctx.lineJoin = 'round';
+  // ceiling: tiles, light panels, vents
+  ctx.strokeStyle = 'rgba(60,64,80,.13)'; ctx.lineWidth = 2;
+  for (let y = 30; y < ceilB; y += 32) { ctx.beginPath(); ctx.moveTo(-20, y); ctx.lineTo(W + 20, y); ctx.stroke(); }
+  for (let x = -20; x < W + 20; x += 92) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ceilB); ctx.stroke(); }
+  for (const fx of [0.12, 0.4, 0.68, 0.93]) { ctx.fillStyle = 'rgba(255,248,214,.55)'; rr(W*fx - 70, 36, 140, 22, 6); ctx.fill();
+    ctx.fillStyle = '#fffdf2'; rr(W*fx - 58, 41, 116, 12, 4); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(60,64,80,.3)'; ctx.stroke(); }
+  for (const fx of [0.27, 0.82]) { ell(W*fx, 70, 15, 9); ctx.fillStyle = '#d7dae0'; ctx.fill(); ctx.lineWidth = 2; ctx.stroke(); }
+  ctx.fillStyle = '#d6d9df'; ctx.fillRect(-20, ceilB, W + 40, winT - ceilB - 7);
+  // outside: sky, clouds, far hills, gum trees, fields, the road and the Camry
+  ctx.save(); ctx.beginPath(); ctx.rect(-20, winT, W + 40, R.h); ctx.clip();
+  ctx.fillStyle = '#a9dcf3'; ctx.fillRect(-20, winT, W + 40, R.h); ctx.fillStyle = '#d4eef9'; ctx.fillRect(-20, winT + R.h*0.3, W + 40, R.h*0.3);
+  cloud(W*0.12, winT + 34, 0.42); cloud(W*0.47, winT + 26, 0.32); cloud(W*0.74, winT + 40, 0.45);
+  ctx.fillStyle = '#b4cfc6'; ctx.beginPath(); ctx.moveTo(-20, grassY); ctx.quadraticCurveTo(W*0.25, grassY - 80, W*0.5, grassY - 10); ctx.quadraticCurveTo(W*0.8, grassY - 95, W + 20, grassY - 20); ctx.lineTo(W + 20, grassY); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#93b9a0'; ctx.beginPath(); ctx.moveTo(-20, grassY); ctx.quadraticCurveTo(W*0.15, grassY - 40, W*0.35, grassY - 6); ctx.quadraticCurveTo(W*0.6, grassY - 46, W + 20, grassY - 4); ctx.lineTo(W + 20, grassY); ctx.closePath(); ctx.fill();
+  for (const [fx, sc] of [[0.04, 0.5], [0.19, 0.42], [0.33, 0.55], [0.5, 0.4], [0.64, 0.48], [0.97, 0.52]]) gum(W*fx, grassY + 4, sc);
+  ctx.fillStyle = C.grass; ctx.fillRect(-20, grassY, W + 40, R.h); ctx.fillStyle = '#74b84c'; ctx.fillRect(-20, grassY, W + 40, 6);
+  ctx.fillStyle = '#c7c3b8'; ctx.fillRect(-20, grassY + 34, W + 40, 7); ctx.fillStyle = '#6b6f7a'; ctx.fillRect(-20, grassY + 41, W + 40, R.h);
+  if (typeof camry === 'function') { const [cx, cy] = s2LlcCar(R); camry(cx, cy, 0.42, {}); }
   ctx.restore();
-  ctx.strokeStyle = '#37404f'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(x, y + h*0.3); ctx.lineTo(x + w, y + h*0.3); ctx.stroke();   // the transom
-  ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.strokeRect(x, y, w, h);
-  ctx.fillStyle = '#d8d0c0'; rr(x - 26, y + h + 6, w + 52, 16, 4); ctx.fill(); ctx.lineWidth = 4; ctx.stroke();                            // the sill
+  // the pane he jumps through: glass streaks, or what is left of it
+  ctx.save(); ctx.beginPath(); ctx.rect(R.x, R.y, R.w, R.h); ctx.clip();
+  if (!broken) { ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 12; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(R.x + R.w*0.08, R.y + R.h*0.62); ctx.lineTo(R.x + R.w*0.24, R.y + R.h*0.14); ctx.moveTo(R.x + R.w*0.19, R.y + R.h*0.66); ctx.lineTo(R.x + R.w*0.31, R.y + R.h*0.3); ctx.stroke(); }
+  else { ctx.fillStyle = 'rgba(205,236,250,.85)'; ctx.strokeStyle = C.line; ctx.lineWidth = 3;
+    for (const [px, py, a, b] of [[R.x, R.y, 1, 1], [R.x + R.w, R.y, -1, 1], [R.x, R.y + R.h, 1, -1], [R.x + R.w, R.y + R.h, -1, -1]]) {
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + a*R.w*0.16, py); ctx.lineTo(px + a*R.w*0.05, py + b*R.h*0.08); ctx.lineTo(px + a*R.w*0.07, py + b*R.h*0.2); ctx.lineTo(px, py + b*R.h*0.13); ctx.closePath(); ctx.fill(); ctx.stroke(); } }
+  ctx.restore();
+  // window frames: a top rail, a transom, thin mullions, one wide pillar, the frame round his pane
+  ctx.fillStyle = '#454c5a'; ctx.fillRect(-20, winT - 7, W + 40, 9); ctx.fillRect(-20, winT + R.h*0.27 - 3, W + 40, 6);
+  for (const fx of [0, 0.145, 0.29, R.x/W, (R.x + R.w)/W, 1]) ctx.fillRect(W*fx - 4, winT, 8, R.h);
+  ctx.fillStyle = '#d9dce2'; ctx.fillRect(W*0.43 - 15, winT - 7, 30, R.h + 7); ctx.lineWidth = 3; ctx.strokeStyle = C.line; ctx.strokeRect(W*0.43 - 15, winT - 7, 30, R.h + 7);
+  ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.strokeRect(R.x, R.y, R.w, R.h);
+  // bunting across each pane
+  const spans = [[0, 0.145], [0.145, 0.29], [0.29, 0.416], [0.444, R.x/W], [R.x/W, (R.x + R.w)/W], [(R.x + R.w)/W, 1]];
+  spans.forEach(([a, b], si) => {
+    const x0 = W*a + 6, x1 = W*b - 6, y0 = winT + 12, sag = 20, at = u => [lerp(x0, x1, u), y0 + 4*sag*u*(1 - u)];
+    ctx.strokeStyle = 'rgba(74,47,12,.55)'; ctx.lineWidth = 2; ctx.beginPath();
+    for (let i = 0; i <= 12; i++) { const [px, py] = at(i/12); if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
+    ctx.stroke();
+    const n = Math.max(3, Math.floor((x1 - x0)/26));
+    for (let i = 0; i < n; i++) { const [px, py] = at((i + 0.5)/n); ctx.beginPath(); ctx.moveTo(px - 8, py); ctx.lineTo(px + 8, py); ctx.lineTo(px, py + 17); ctx.closePath();
+      ctx.fillStyle = S2_BUNT[(i + si*2) % S2_BUNT.length]; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(74,47,12,.5)'; ctx.stroke(); }
+  });
+  // the low cabinet under the windows, books standing face out on top
+  ctx.fillStyle = '#e8e2d6'; ctx.fillRect(-20, winB, W + 40, cabT - winB);
+  for (let i = 0, x = 14; x < W - 10; i++, x += 36 + (i % 3)*6) {
+    if (x > W*0.43 - 30 && x < W*0.43 + 20) continue;
+    ctx.save(); ctx.translate(x, cabT); ctx.rotate(((i*7) % 5 - 2)*0.03); rr(-12, -30, 24, 30, 3); ctx.fillStyle = S2_BOOKS[(i*3) % S2_BOOKS.length]; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.line; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(-7, -23, 14, 4); ctx.fillRect(-7, -15, 10, 3); ctx.restore();
+  }
+  ctx.fillStyle = '#eceef2'; ctx.fillRect(-20, cabT, W + 40, cabB - cabT); ctx.fillStyle = '#cfd3db'; ctx.fillRect(-20, cabT, W + 40, 6);
+  ctx.strokeStyle = 'rgba(60,64,80,.25)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-20, (cabT + cabB)/2); ctx.lineTo(W + 20, (cabT + cabB)/2); ctx.stroke();
+  ctx.globalAlpha = 0.7;
+  for (let i = 0, x = 6; x < W; i++, x += 12 + (i % 4)*3) { ctx.fillStyle = S2_BOOKS[(i*5) % S2_BOOKS.length]; ctx.fillRect(x, cabT + 10 + (i % 3)*2, 9, (cabB - cabT)/2 - 14 - (i % 3)*2); ctx.fillRect(x + 3, (cabT + cabB)/2 + 4, 9, (cabB - cabT)/2 - 8); }
+  ctx.globalAlpha = 1; ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.beginPath(); ctx.moveTo(-20, cabT); ctx.lineTo(W + 20, cabT); ctx.moveTo(-20, cabB); ctx.lineTo(W + 20, cabB); ctx.stroke();
+  // dark carpet
+  ctx.fillStyle = '#3b3f4d'; ctx.fillRect(-20, cabB, W + 40, H - cabB);
+  ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 2;
+  for (let y = cabB + 22; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(-20, y); ctx.lineTo(W + 20, y); ctx.stroke(); }
+  // the white table with green plastic chairs (left), the wooden book trolley (right)
+  const gy = H*0.84, tx0 = W*0.03, tx1 = W*0.29, tt = gy - 92;
+  for (const fx of [0.09, 0.23]) { ctx.fillStyle = '#86b08a'; rr(W*fx - 32, tt - 52, 64, 56, 14); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.stroke(); }
+  ctx.strokeStyle = '#5b6070'; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.beginPath();
+  for (const x of [tx0 + 14, tx1 - 14]) { ctx.moveTo(x, tt + 12); ctx.lineTo(x, gy - 18); }
+  ctx.stroke(); ctx.lineCap = 'butt';
+  ctx.fillStyle = '#f7f7f9'; rr(tx0, tt, tx1 - tx0, 16, 4); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.stroke();
+  const rx0 = W*0.64, rx1 = W*0.86, rt = gy - 150, rb = gy - 22;
+  ctx.fillStyle = '#d9a76a'; rr(rx0, rt, rx1 - rx0, rb - rt, 6); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.stroke();
+  for (let row = 0; row < 2; row++) {
+    const by = rt + 50 + row*40;
+    ctx.fillStyle = '#b8864f'; ctx.fillRect(rx0 + 6, by, rx1 - rx0 - 12, 4);
+    for (let i = 0, x = rx0 + 10; x < rx1 - 18; i++, x += 13 + (i % 3)*2) { ctx.fillStyle = S2_BOOKS[(i*3 + row) % S2_BOOKS.length]; rr(x, by - 30 + (i % 2)*3, 11, 30 - (i % 2)*3, 2); ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(74,47,12,.6)'; ctx.stroke(); }
+  }
+  for (let i = 0; i < 4; i++) {
+    const x = rx0 + 20 + i*((rx1 - rx0 - 40)/3);
+    ctx.save(); ctx.translate(x, rt + 4); ctx.rotate(-0.08 + i*0.05); rr(-15, -34, 30, 38, 3);
+    ctx.fillStyle = S2_BOOKS[(i*5 + 2) % S2_BOOKS.length]; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = C.line; ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(-9, -26, 18, 4); ctx.restore();
+  }
+  for (const x of [rx0 + 16, rx1 - 16]) { ell(x, rb + 10, 9, 9); ctx.fillStyle = '#2f3340'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.line; ctx.stroke(); }
+  ctx.restore();
+  // the QUIET STUDY sign hanging from the ceiling (it swings at the sneeze)
+  ctx.save(); ctx.translate(95, 0); ctx.rotate(signSwing); ctx.translate(-95, 0);
+  ctx.strokeStyle = C.line; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(40, 0); ctx.lineTo(40, 26); ctx.moveTo(150, 0); ctx.lineTo(150, 26); ctx.stroke();
+  ctx.fillStyle = '#e8d3a2'; rr(18, 26, 154, 34, 8); ctx.fill(); ctx.lineWidth = 4; ctx.stroke();
+  font(18); ctx.fillStyle = C.line; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINES_SCHOOL2.llc.sign, 95, 44);
   ctx.restore();
 }
 // a 4-point twinkle (the glint on the car)
@@ -995,7 +1143,7 @@ function s2Spark(x, y, r, rot){
 }
 // Max, 12 Oct: "this part, "oh, a car!" pause. I want to ride it. "pause 5s, nai long makes a funny face" jumps out the window."
 // The tiptoe and the ACHOO stay from before; the ending is his. sceneEscape opens outside, on the burst at this window.
-const LLC_T = {ach: 6.9, car: 9.5, oh: 9.9, ohEnd: 11.9, ride: 12.9, rideEnd: 15.0, face: 15.2, jump: 18.7, fly: 19.0, hit: 19.55};
+const LLC_T = {ach: 7.05, car: 9.65, oh: 10.05, ohEnd: 12.05, ride: 13.05, rideEnd: 15.15, face: 15.35, jump: 18.85, fly: 19.15, hit: 19.7};   // ach 7.05: "Nobody heard a thing." stays 2.5 s real
 // the pause after "Oh, a car!" is ohEnd to ride (1.0 scene s = 1.4 s real); the funny face is face to jump (3.5 scene s = 5.0 s real)
 const S2_LLC_SFX = [
   ...[0.5, 1.6, 2.7, 3.8].map(a => [a + 0.55, 'squeak', {p: 1.3, g: 0.5}]),          // every tiptoe stride ends on a squeak
@@ -1041,17 +1189,14 @@ function sceneLLC(t){
   const z = 1 + 0.16*ease(s2Tw(t, E.face, E.face + 1.2))*(1 - ease(s2Tw(t, E.jump - 0.4, E.jump)));
   ctx.save();
   if (z > 1.0005) { const cx = xs[4], cy = gy - 125; ctx.translate(cx, cy); ctx.scale(z, z); ctx.translate(-cx, -cy); }
-  s2Shelves(0.12, shake, swing);
-  s2LlcWindow(WR, t >= E.hit);
-  ctx.fillStyle = '#6f78a8'; ctx.fillRect(0, gy - 8, W, H); ctx.fillStyle = '#5f6898'; ctx.fillRect(0, gy - 8, W, 8);
-  ctx.fillStyle = 'rgba(29,22,64,.12)'; ctx.fillRect(0, gy - 8, W, H);
-  // books jump off the shelves at the sneeze
-  if (kk > 0) [[0.08, 0.30, 0], [0.2, 0.32, 1], [0.33, 0.28, 2], [0.45, 0.34, 3], [0.56, 0.30, 4], [0.4, 0.58, 5]].forEach(([fx, fyy, i]) => {
+  s2Library(shake, swing, t >= E.hit, WR);
+  // books jump off the cabinet and the trolley at the sneeze
+  if (kk > 0) [[0.08, 0.53, 0], [0.2, 0.53, 1], [0.33, 0.53, 2], [0.52, 0.53, 3], [0.68, 0.64, 4], [0.8, 0.64, 5]].forEach(([fx, fyy, i]) => {
     const vy = -520 - i*40, bx = W*fx + (i - 2)*18*kk, byy = H*fyy + vy*kk + 1500*kk*kk/2*0.6;
     if (byy < gy - 10 && kk < 1.6) { ctx.save(); ctx.translate(bx, byy); ctx.rotate(kk*(6 + i)); rr(-9, -32, 18, 64, 3); ctx.fillStyle = S2_BOOKS[(i*3) % S2_BOOKS.length]; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.line; ctx.stroke(); ctx.restore(); } });
   // the glint on the car that catches his eye
   const gk = s2Tw(t, E.car - 0.1, E.car + 0.8);
-  if (gk > 0 && gk < 1) s2Spark(WR.x + WR.w*0.6 + 22, WR.y + WR.h*0.66 + 40, 26*Math.sin(Math.PI*gk), gk*2);
+  if (gk > 0 && gk < 1) { const [cx, cy] = s2LlcCar(WR); s2Spark(cx + 22, cy - 44, 26*Math.sin(Math.PI*gk), gk*2); }
   if (!gone) s2NL(x, y, s, Object.assign(o, {sx, sy, rot}), face >= 0 ? () => s2FaceDraw(face, t) : null);
   if (sneezeAmp > 0) for (let i = 0; i < 3; i++) { const ph = (t*3 + i/3) % 1; ell(x + 40 + ph*40, y - 190 + ph*20 - i*6, 3 + ph*3, 3 + ph*3); ctx.fillStyle = `rgba(255,255,255,${0.8 - ph*0.8})`; ctx.fill(); }
   // he goes through the window: a white burst and the glass flying
@@ -1080,4 +1225,4 @@ function sceneLLC(t){
   if (t > E.ride && t < E.rideEnd) bubble(L.ride, x + 30, nTop, 30, 320);
   ctx.restore();
 }
-const S2_LLC_DUR = LLC_T.hit + 0.6;                       // scene seconds (28.8 s real); the burst plays out, then sceneEscape
+const S2_LLC_DUR = LLC_T.hit + 0.6;                       // scene seconds (29.0 s real); the burst plays out, then sceneEscape

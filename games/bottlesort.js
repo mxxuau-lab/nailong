@@ -2,7 +2,8 @@
 const LINES_BOTTLESORT = {
   sign: 'THE DECK',                       // Max, 12 Oct: "instead of brindy cafe it's called THE DECK"
   introTitle: 'THE DECK RESTOCK',
-  intro: '3 the same in one box and they vanish. drag them around!',
+  intro: '3 the same in one box and they vanish. Drag them around!',
+  start: 'press any key to start',        // under the instruction card (same words as the battle and the octagon cards)
   fail: 'The fridge jammed. Nailong shakes it loose.',
   win: 'Fridge stocked. The red bean is safe.',
   praise: ['Wow', 'Cool', 'Pretty', 'Wonderful', 'Excellent', 'Yum'],
@@ -126,6 +127,8 @@ function bsItem(type, x, y, s, alpha = 1){
 
 // ---- the game ----
 const BS = {};
+const BS_CARD = 6.0;                   // the first instruction card stays until a key or a click, or this many seconds
+const BS_STUCK = 3.0;                  // a jammed fridge: seconds before it restocks (a key or a click goes sooner, after 1 s), long enough to read the line
 const BS_LAND = 0.28;                  // seconds of squash-and-rebound when a drink lands in a slot
 const bsLv = () => BS_LEVELS[BS.level - 1];
 function bsLayout(n){
@@ -144,7 +147,7 @@ function bsAbstract(){ return BS.cs.map(c => ({f: c.f.map(o => o ? o.t : 0), b: 
 function bsReset(again, level){
   if (level) BS.level = level;
   const spec = bsLv().spec;
-  Object.assign(BS, {drag: null, sel: null, intro: again ? 0.9 : (BS.level > 1 ? 1.3 : 1.9), again: !!again, hist: [], cleared: 0, said: '', saidT: 0, stuck: -1, win: -1, particles: [], rings: [], botT: 0, checked: false, praiseN: 0, px: 0, py: 0, plan: null, solver: null, kbOn: false, kbBox: 0, kbSlot: 0, unlockT: 0, hop: 0, hopD: 0.35, hopH: 18});
+  Object.assign(BS, {drag: null, sel: null, intro: again ? 0.9 : (BS.level > 1 ? 1.3 : BS_CARD), again: !!again, hist: [], cleared: 0, said: '', saidT: 0, stuck: -1, win: -1, particles: [], rings: [], botT: 0, checked: false, praiseN: 0, px: 0, py: 0, plan: null, solver: null, kbOn: false, kbBox: 0, kbSlot: 0, unlockT: 0, hop: 0, hopD: 0.35, hopH: 18});
   BS.total = spec.reduce((a, c) => a + c.f.filter(x => x).length + c.b.length, 0) / 3;
   bsBuild(spec);
   if (again) window.SFX && SFX.play('whoosh', {p: 0.8, g: 0.6});            // the fridge is swept and restocked
@@ -155,7 +158,7 @@ function bsPlaceTargets(){
     c.b.forEach((o, k) => { const p = bsSlot(i, k, true); o.tx = p.x; o.ty = p.y; o.tsc = p.sc; });
   });
 }
-function bsSay(txt){ BS.said = txt; BS.saidT = 1.3; }
+function bsSay(txt, life = 1.3){ BS.said = txt; BS.saidT = life; }
 const bsRoom = j => BS.cs[j].k === 0 && BS.cs[j].f.includes(null);
 function bsSnapshot(){ BS.hist.push({a: JSON.parse(JSON.stringify(bsAbstract())), n: BS.cleared}); if (BS.hist.length > 8) BS.hist.shift(); }
 function bsUndo(){
@@ -318,9 +321,9 @@ function bsDraw(t, dt){
   if (BS.solver && playing) {
     const r = BS.solver.run(5);
     if (r) { BS.solver = null; BS.plan = r.path;
-      if (!r.path && r.exhausted) { BS.stuck = 0; bsSay(LINES_BOTTLESORT.fail); window.SFX && SFX.play('buzz'); const a = GAMES.bottlesort.api; a && a.died && a.died(); } }   // a jam costs one ride life
+      if (!r.path && r.exhausted) { BS.stuck = 0; bsSay(LINES_BOTTLESORT.fail, BS_STUCK); window.SFX && SFX.play('buzz'); const a = GAMES.bottlesort.api; a && a.died && a.died(); } }   // a jam costs one ride life
   }
-  if (BS.stuck >= 0) { BS.stuck += dt; if (BS.stuck > 1.5) bsReset(true); }
+  if (BS.stuck >= 0) { BS.stuck += dt; if (BS.stuck > BS_STUCK) bsReset(true); }
   if (BS.win >= 0) {
     BS.win += dt;
     if (BS.level < BS_N) { if (BS.win > 0.9) bsReset(false, BS.level + 1); }
@@ -390,6 +393,7 @@ function bsDraw(t, dt){
       ctx.fillStyle = p.col; ctx.fill(); ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.stroke(); }
     else { ell(p.x, p.y, 7, 7); ctx.fillStyle = p.col; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.line; ctx.stroke(); }
     ctx.globalAlpha = 1; }
+  if (BS.stuck >= 0) { ctx.fillStyle = 'rgba(29,22,64,.5)'; ctx.fillRect(0, 0, W, H); title(LINES_BOTTLESORT.jammed, W/2, H*0.5, 64); }   // under Nailong, so his line stays bright
   const side = L.x0 > 150, nx = side ? Math.max(80, L.x0 / 2) : 150, ny = side ? H - 20 : H - 14;      // narrow screens: bottom left, clear of the undo / again buttons
   let hy = 0, hsx = 1, hsy = 1; const hop = BS.hop > 0, cheer = hop || BS.win >= 0;
   if (hop) { const h = 1 - BS.hop / BS.hopD;          // the hop: stretched in the air, a quick squash when his feet land
@@ -412,10 +416,11 @@ function bsDraw(t, dt){
     }
     else { title(LINES_BOTTLESORT.introTitle, W/2, H*0.34, Math.min(60, W/16));
       bubble(LINES_BOTTLESORT.intro, W/2, H*0.62, 30, Math.min(640, W*0.8));
-      bsItem(1, W/2 - 90, H*0.82, 100); bsItem(2, W/2, H*0.82, 100); bsItem(3, W/2 + 90, H*0.82, 100); }
+      bsItem(1, W/2 - 90, H*0.82, 100); bsItem(2, W/2, H*0.82, 100); bsItem(3, W/2 + 90, H*0.82, 100);
+      ctx.save(); ctx.globalAlpha = 0.7 + 0.3*Math.sin(t*4); font(24, 600); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINES_BOTTLESORT.start, W/2, H*0.88); ctx.restore();
+      const left = clamp(BS.intro/BS_CARD, 0, 1); rr(W/2 - 90, H*0.88 + 20, 180*left, 6, 3); ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fill(); }   // runs down, so the wait never feels stuck
   }
   if (BS.win >= 0) title(LINES_BOTTLESORT.levelDone, W/2, H*0.5, 80);
-  if (BS.stuck >= 0) { ctx.fillStyle = 'rgba(29,22,64,.5)'; ctx.fillRect(0, 0, W, H); title(LINES_BOTTLESORT.jammed, W/2, H*0.5, 64); }
 }
 
 GAMES.bottlesort = {
@@ -429,15 +434,18 @@ GAMES.bottlesort = {
     if (api && api.replay) BS.intro = 0;                                       // a replay from the end menu skips the intro card
   },
   draw(t, dt){ bsDraw(t, dt); },
+  cardUp(){ return !!BS.cs && BS.intro > 0 && !BS.again; },   // main.js: a subtitle waits for the card to go
   key(e){
     if (!BS.cs) return;
     if (BS.intro > 0 && !BS.again) { BS.intro = 0; return; }              // any key skips the intro / level card
+    if (BS.stuck > 1) { BS.stuck = BS_STUCK + 0.01; return; }             // jammed: she has read it, restock now
     if (BS.win >= 0 || BS.stuck >= 0) return;
     if (e.key === 'u' || e.key === 'U' || e.key === 'z') bsUndo();
     else if (e.key === 'r' || e.key === 'R') bsReset(true);
     else if (BS.intro <= 0) bsKbKey(e);
   },
   pointer(kind, x, y){
+    if (BS.cs && kind === 'down' && BS.stuck > 1) { BS.stuck = BS_STUCK + 0.01; return; }
     if (!BS.cs || BS.win >= 0 || BS.stuck >= 0) return;
     if (BS.intro > 0) { if (kind === 'down' && !BS.again) BS.intro = 0; return; }       // a click skips the intro too
     BS.px = x; BS.py = y;

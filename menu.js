@@ -414,6 +414,7 @@ const MENU = {
       return;
     }
     once('page', () => window.SFX && SFX.play('zip', {g: .5}));
+    if (t < PAY.page + .4) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }   // the page fades in from the black, not over a flash of the menu
     drawCheckout(clamp((t - PAY.page) / .3, 0, 1));
     if (t >= PAY.poke) {   // the poke: Nailong pops up over the dimmed page, then Max's line
       const u = t - PAY.poke;
@@ -473,7 +474,7 @@ const MENU = {
       font(28, 600); ctx.fillStyle = '#f3e9c6'; ctx.textAlign = 'center'; ctx.fillText(LINES_MENU.beatSub, W / 2, H * .17 + 156);
       ctx.restore();
     }
-    if (t > 1.2) { ctx.save(); ctx.globalAlpha = .6 + .4 * Math.sin(t * 5); font(24, 600); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(LINES_MENU.cont, W / 2, H - 70); ctx.restore(); }
+    if (t > 1.2) { ctx.save(); ctx.globalAlpha = .6 + .4 * Math.sin(t * 5); font(24, 600); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(LINES_MENU.cont, W / 2, H * .17 + 206); ctx.restore(); }   // under the words, clear of the jumping Nailong (it sat on his tummy)
   },
 };
 

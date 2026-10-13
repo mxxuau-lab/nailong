@@ -1,14 +1,13 @@
 // every word this file shows (the games' own words live in their files). Max edits these.
 const LINES_MAIN = {
-  skip: 'space to skip', skipTouch: 'tap or space to skip', again: 'space to watch again', againTouch: 'tap to watch again',
+  again: 'space to watch again', againTouch: 'tap to watch again',   // only on the test end card (?clip=): no clip in the ride can be skipped
   livesTitle: 'You have 3 lives.',           // TODO Max: his opening joke replaces this
   livesAny: 'press any key',
   overTitle: 'OUT OF LIVES',
   pay: 'pay $10 for 3 more lives',
   exit: 'exit the game',
   bruh: 'bruh, you really did that?',
-  keep: 'keep going',
-  back: 'go back',
+  nope: "No, I wouldn't actually do that to you.",   // Max's line (13 Oct): the joke explained; she carries on, no hearts back
   choose: 'arrows to choose, Enter to pick',
   // a movie-style subtitle that flashes up during a game in the ride (Max, 12 Oct), about 2 s after its instruction card goes.
   // Max fills the empty ones; an empty one shows nothing. Never in replays from the menu.
@@ -39,7 +38,7 @@ const FLOW = [
   {scene: sceneCafe2, dur: durOr(typeof CAFE2_DUR !== 'undefined' && CAFE2_DUR, 31)},
   {game: 'battle'},
   {scene: sceneCafe3, dur: durOr(typeof CAFE3_DUR !== 'undefined' && CAFE3_DUR, 7.8)},
-  {scene: sceneSlide, dur: durOr(typeof SLIDE_DUR !== 'undefined' && SLIDE_DUR, 12.2)},   // the Mr Shou chase begins
+  {scene: clipFn('sceneChase', sceneSlide), dur: durOr(typeof CHASE_DUR !== 'undefined' && CHASE_DUR, durOr(typeof SLIDE_DUR !== 'undefined' && SLIDE_DUR, 12.2))},   // the Mr Shou chase along the real route (story-chase.js; Max, 13 Oct), into the slide
   {game: 'octagon'},                            // the last school scene before the car
   {scene: sceneLLC, dur: durOr(typeof LLC_DUR !== 'undefined' && LLC_DUR, typeof S2_LLC_DUR !== 'undefined' ? S2_LLC_DUR : 20.2)},
   {scene: sceneEscape, dur: durOr(CANBERRA_DUR.sceneEscape, 10.4)},
@@ -48,6 +47,7 @@ const FLOW = [
   {scene: sceneBridge, dur: durOr(CANBERRA_DUR.sceneBridge, 12.9)},
   {game: 'blockblast'},
   {scene: sceneParliament, dur: durOr(CANBERRA_DUR.sceneParliament, 12)},   // finale (sceneFinale is an alias, so only one)
+  typeof window.sceneBirthday === 'function' && {scene: window.sceneBirthday, dur: durOr(CANBERRA_DUR.sceneBirthday, 6.5)},   // "Happy Birthday!" card (Max, 13 Oct)
   {menu: true},
 ].filter(Boolean);
 // "go back" (out of lives) and "watch the story again" restart at the lives card: the intro and its question happen once
@@ -95,8 +95,9 @@ const curGame = () => replay ? GAMES[replay] : cur().menu ? MENU : cur().game &&
 // ---------- three lives for the whole ride ----------
 // Every game calls api.died() once per death, then does its own instant retry. A death cuts one heart (a dotted line runs
 // across it, snip, it falls in two halves, a dotted outline stays). The last one freezes the game, a black shutter comes down,
-// "pay $10" / "exit", then "bruh, you really did that?", then "keep going" (3 hearts back, the game carries on where it was)
-// or "go back" (the ride restarts). Never in replays from the end menu.
+// "pay $10" / "exit", then "bruh, you really did that?", then "No, I wouldn't actually do that to you.", then the shutter goes up
+// and the game carries on where it was, with no hearts back (Max, 13 Oct: "she doesn't get the lives back"; no "go back" to the
+// start). After that a death costs nothing more. Never in replays from the end menu.
 // ?lives=N starts with N hearts (1 to 3); with ?game=NAME the hearts only show when ?lives= is given.
 const LIVES = 3;
 const LIVES_START = clamp(Math.round(+q.get('lives') || LIVES), 1, LIVES);
@@ -104,7 +105,7 @@ window.RIDE = {failed: false, lives: LIVES_START, deaths: 0, overs: 0};   // fai
 if (q.get("failed") === "1") RIDE.failed = true;   // test hook: the menu as it looks after she ran out of lives
 let cuts = [];          // hearts being cut: {i, t}
 let pops = [];          // hearts popping back in: {i, t}
-let over = null;        // the out-of-lives overlay: {t, phase: 'wall'|'pay'|'bruh'|'lift'|'back', sel, at, ft, pick, bt}
+let over = null;        // the out-of-lives overlay: {t, phase: 'wall'|'pay'|'bruh'|'lift', sel, at, ft, pick, bt}
 const livesOn = () => !replay && !!cur() && !!cur().game && (steps === FLOW || q.has('lives'));
 function loseLife(){
   if (over || RIDE.lives <= 0) return;
@@ -211,18 +212,15 @@ function drawHearts(dt){
 // ---------- the out-of-lives overlay ----------
 // Paced so each beat lands (Max, 12 Oct: "things land better when you give her some time to process"): the last heart is cut,
 // the frozen game holds about 1 s, the shutter comes down slowly (1.2 s), a 1 s hold with OUT OF LIVES, then the two buttons
-// fade in. After her pick a 0.8 s hold, then "bruh, you really did that?" big, held 2 s before "keep going" / "go back".
+// fade in. After her pick a 0.8 s hold, then "bruh, you really did that?" big for 2.6 s, then "No, I wouldn't actually do that
+// to you." for 3.2 s, then the shutter lifts by itself.
 const OVER_WAIT = 2.05;      // from the death to the shutter starting (the heart cut takes 1.9 s, its snip is at 1.05 s)
 const SH_FALL = 1.2;         // the shutter's fall
 const OVER_TITLE = 1.7, OVER_BTN = 2.5, OVER_PICK = 2.9;   // on the shutter's clock: the title, the buttons fading in, picks allowed
-const BRUH_AT = 0.8, BRUH_BTN = 2.8, BRUH_PICK = 3.1;      // on the pick's clock: the bubble, the next buttons, picks allowed
+const BRUH_AT = 0.8, NOPE_AT = 3.6, NOPE_END = 6.8;        // on the pick's clock: "bruh...", "No, I wouldn't...", the shutter lifts
 function overButtons(){
   const bw = Math.min(W*0.36, 500), bh = 170, gap = 56, y = H*0.45;
   return [{x: W/2 - gap/2 - bw, y, w: bw, h: bh}, {x: W/2 + gap/2, y, w: bw, h: bh}];
-}
-function choiceButtons(){
-  const w = Math.min(W*0.2, 300), h = 120, x0 = W*0.5, y = H*0.66;
-  return [{x: x0, y, w, h}, {x: x0 + w + 44, y, w, h}];
 }
 function wrapLines(text, maxW){
   const words = text.split(' ');
@@ -289,45 +287,31 @@ function drawOver(dt){
     if (o.phase === 'pay' && T > OVER_PICK + 0.3) { font(24, 600); ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINES_MAIN.choose, W/2, H*0.84); }
     ctx.restore();
   }
-  if (o.phase === 'bruh' || o.phase === 'lift' || o.phase === 'back') {
+  if (o.phase === 'bruh' || o.phase === 'lift') {
     o.bt += dt;
     const B = o.bt, rise = o.phase === 'lift' ? 1 : ease(clamp((B - 0.35)/0.6, 0, 1)), down = o.phase === 'lift' ? ease(clamp(B/0.5, 0, 1)) : 0;
     const nx = W*0.24, ny = H + 330 - rise*340 + down*360;
     if (ny < H + 320) {
       nailong(nx, ny, 1.6, {look: [0.8, -0.1], mouth: 'o', arms: 'down', sx: 1 + Math.sin(B*3)*0.01});
       if (B > BRUH_AT && o.phase === 'bruh') {
+        const nope = B > NOPE_AT;
         if (!o.bruhSaid) { o.bruhSaid = true; window.SFX && SFX.play('boing', {p: 0.8}); }
-        const keep = CLOCK; CLOCK = 1e6 + B;   // bubble() pops on CLOCK; the frozen game clock would hold it at size 0
-        ctx.save(); bubble(LINES_MAIN.bruh, nx + 150, ny - 300, 64, Math.min(640, W*0.5)); ctx.restore();
+        if (nope && !o.nopeSaid) { o.nopeSaid = true; window.SFX && SFX.play('pop', {p: 1.1}); }
+        const keep = CLOCK; CLOCK = 1e6 + B - (nope ? NOPE_AT : BRUH_AT);   // bubble() pops on CLOCK; the frozen game clock would hold it at size 0
+        ctx.save(); bubble(nope ? LINES_MAIN.nope : LINES_MAIN.bruh, nx + 150, ny - 300, nope ? 52 : 64, Math.min(nope ? 700 : 640, W*0.52)); ctx.restore();
         CLOCK = keep;
       }
     }
-    if (o.phase === 'bruh') {
-      const cb = choiceButtons();
-      overBtn(cb[0], LINES_MAIN.keep, C.y, clamp((B - BRUH_BTN)/0.45, 0, 1), o.sel === 0, false, null, true);
-      overBtn(cb[1], LINES_MAIN.back, '#e9e3d2', clamp((B - BRUH_BTN - 0.15)/0.45, 0, 1), o.sel === 1, false, null, true);
-      if (B > BRUH_PICK + 0.3) { font(24, 600); ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINES_MAIN.choose, cb[0].x + (cb[1].x + cb[1].w - cb[0].x)/2, cb[0].y + cb[0].h + 52); }
-    }
+    if (o.phase === 'bruh' && B > NOPE_END) { o.phase = 'lift'; o.bt = 0; }   // no choice to make: she just carries on
   }
   if (o.phase === 'lift' && o.bt > 1.65) { endOver(); return; }
-  if (o.phase === 'back') {
-    const k = clamp((o.bt - 0.1)/0.45, 0, 1);
-    ctx.fillStyle = `rgba(29,22,64,${k})`; ctx.fillRect(0, 0, W, H);
-    if (k >= 1) restartRide();
-  }
 }
-// a choice on either screen: i = 0 (pay / keep going) or 1 (exit / go back)
+// her choice on the pay screen: i = 0 (pay) or 1 (exit); either way the same thing happens next
 function overPick(i){
   const o = over;
   if (o.phase === 'pay' && o.t > OVER_PICK) {
     o.pick = i; o.sel = 0; o.phase = 'bruh'; o.bt = 0; window.SFX && SFX.play('thud', {p: 0.8});
     if (i === 0) noteFell();   // she tried to pay: the menu's fake checkout pokes her for falling for it twice
-  }
-  else if (o.phase === 'bruh' && o.bt > BRUH_PICK) {
-    window.SFX && SFX.play('pop');
-    if (i === 0) {   // keep going: three hearts back, the shutter goes up, the game carries on where it was
-      o.phase = 'lift'; o.bt = 0; RIDE.lives = LIVES; pops = [0, 1, 2].map(k => ({i: k, t: -0.15 - k*0.2}));
-    } else { o.phase = 'back'; o.bt = 0; }
   }
 }
 // how many times she has pressed a pay button for real (kept in localStorage; test runs keep it in memory)
@@ -341,16 +325,15 @@ function endOver(){
   over = null;
   const g = curGame(); hintEl.textContent = g ? keyHint(g.hint || '') : '';
 }
-function restartRide(){ RIDE.lives = LIVES; RIDE.failed = false; steps = FLOW; replay = null; go(RIDE_START); }
 function overKey(e){
   const o = over; e.preventDefault && e.preventDefault();
-  if (o.phase !== 'pay' && o.phase !== 'bruh') return;
+  if (o.phase !== 'pay') return;
   if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { if (o.sel !== 0) { o.sel = 0; window.SFX && SFX.play('tick'); } }
   else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { if (o.sel !== 1) { o.sel = 1; window.SFX && SFX.play('tick'); } }
   else if (e.key === 'Enter' || e.key === ' ') overPick(o.sel);
 }
 function overPointer(kind, x, y){
-  const o = over, bs = o.phase === 'pay' ? overButtons() : o.phase === 'bruh' ? choiceButtons() : null;
+  const o = over, bs = o.phase === 'pay' ? overButtons() : null;
   if (!bs) return;
   const i = bs.findIndex(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
   if (i < 0) return;
@@ -402,9 +385,9 @@ function startGame(id, onDone){
 }
 // ---------- the subtitle: movie-style words at the bottom during a game in the ride ----------
 // It flashes in SUB_DELAY s after the game's instruction card goes (the first key or click the game gets, the game's own
-// cardUp() if it has one, Tetris's card state, or SUB_CARD s in), one sentence at a time, about 6 s in all, then fades.
+// cardUp() if it has one, Tetris's card state, or SUB_CARD s in), one sentence at a time (1.6 s plus 0.35 s a word each), then fades.
 // The key hint at the bottom hides while it shows. Never in replays, never under the shutter.
-const SUB_DELAY = 2, SUB_CARD = 6, SUB_TOTAL = 6;
+const SUB_DELAY = 2, SUB_CARD = 6;
 let sub = null;
 const gameClock = () => nowS() - gameT0;   // pauses with the out-of-lives freeze and a hidden tab
 function subCardUp(id){
@@ -417,8 +400,8 @@ function drawSub(){
   const c = gameClock();
   if (sub.first == null && (subCardUp(sub.id) === false || c >= SUB_CARD)) sub.first = Math.min(c, SUB_CARD);
   if (sub.first == null || over) { hintEl.style.opacity = ''; return; }
-  const lens = sub.parts.map(x => x.length), all = lens.reduce((a, b) => a + b, 0);
-  const durs = lens.map(n => Math.max(2.6, SUB_TOTAL*n/all)), end = durs.reduce((a, b) => a + b, 0);
+  // each sentence stays up long enough to read while she plays: 1.6 s plus 0.35 s a word, never under 2.6 s
+  const durs = sub.parts.map(x => Math.max(2.6, 1.6 + 0.35*x.split(/\s+/).length)), end = durs.reduce((a, b) => a + b, 0);
   const u = c - sub.first - SUB_DELAY;
   if (u < 0) return;
   if (u > end) { sub = null; hintEl.style.opacity = ''; return; }
@@ -461,7 +444,7 @@ function go(i){
   if (st.intro) { const myGo = goN; hintEl.textContent = ''; INTRO.start(() => { if (goN === myGo) go(mySi + 1); }); return; }
   if (st.game && !GAMES[st.game]) { console.error('game not registered:', st.game); hintEl.textContent = 'missing game: ' + st.game; return; }
   if (st.game) { startGame(st.game, (secs, score) => { MENU.record(st.game, secs, score); go(mySi + 1); }); return; }
-  hintEl.textContent = st.end ? (TOUCH ? LINES_MAIN.againTouch : LINES_MAIN.again) : (TOUCH ? LINES_MAIN.skipTouch : LINES_MAIN.skip);
+  hintEl.textContent = st.end ? (TOUCH ? LINES_MAIN.againTouch : LINES_MAIN.again) : '';   // Max, 13 Oct: "no cut scenes can be skipped"
 }
 function next(){ go(cur().end ? 0 : si + 1); }
 // story clips play at 70% speed (Max, 12 Oct: "too fast paced animations, slow it down 30%"); games keep their own pace
@@ -503,7 +486,7 @@ addEventListener('keydown', e => {
   if (g) { if (sub && sub.first == null && isAnyKey(e)) sub.first = gameClock(); g.key && g.key(e); return; }
   if (cur().intro) { INTRO.key(e, stepT()*SCENE_SPEED); return; }
   if (cur().lives) { if (isAnyKey(e) && stepT() >= LIVES_GO) { e.preventDefault(); next(); } return; }
-  if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') next();
+  if (cur().end && (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight')) next();   // only the test end card; story clips can't be skipped
 });
 const vxy = e => [e.clientX * W / innerWidth, e.clientY * H / innerHeight];
 cv.addEventListener('pointerdown', e => {
@@ -512,7 +495,7 @@ cv.addEventListener('pointerdown', e => {
   if (g) { if (sub && sub.first == null) sub.first = gameClock(); g.pointer && g.pointer('down', ...vxy(e)); }
   else if (cur().intro) INTRO.pointer('down', ...vxy(e), stepT()*SCENE_SPEED);
   else if (cur().lives) { if (stepT() >= LIVES_GO) next(); }
-  else next();
+  else if (cur().end) next();
 });
 cv.addEventListener('pointermove', e => {
   if (over) { overPointer('move', ...vxy(e)); return; }
@@ -546,6 +529,7 @@ try {
   document.querySelector('link[rel=icon]').href = fc.toDataURL();
 } catch (e) {}
 
+{ const ld = document.getElementById('loading'); if (ld) ld.remove(); }   // index.html's loading screen: the game takes over from here
 go(+(q.get('scene') || 0));
 if (q.get('style') === 'crayon') document.getElementById('styleBtn').click();
 const sim = +(q.get('sim') || 0);   // test hook: fast-forward the current step by N seconds at 60 fps

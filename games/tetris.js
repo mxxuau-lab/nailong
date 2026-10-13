@@ -1,8 +1,10 @@
 // ---------- NAILONG TETRIS: on Jed's phone, in the Chinese room ----------
 // Real guideline Tetris: SRS rotation with wall kicks, 7-bag, hold (once per piece), ghost piece, 5 next,
 // 0.5 s lock delay (15 move resets), DAS/ARR, soft drop and hard drop, block-out and lock-out top-outs.
-// ONE level: Marathon started at LEVEL 8 (guideline gravity, about 0.135 s a row), clear 10 lines to win.
-// The clip before ends on "WHY'S IT SO FAST!!??", so the speed is the joke.
+// ONE level, clear 10 lines to win, on a HALF-HEIGHT well (Max, 13 Oct: "half the amount of space in tetris"): 10 visible
+// rows, not 20. Gravity is guideline LEVEL 6 (about 0.26 s a row), so a piece takes as long to reach the floor of the short
+// well as it did at level 8 in the full one: the space halves, the speed she felt stays. The clip before ends on
+// "WHY'S IT SO FAST!!??", so the speed is the joke. Under the board, Jed's phone shows on-screen buttons (they work on click).
 // EVERY visible line lives here. // TODO joke = a kind placeholder Max can swap.
 const LINES_TETRIS = {
   title: 'NAILONG TETRIS',
@@ -17,7 +19,7 @@ const LINES_TETRIS = {
   holdTxt: 'HOLD',
   nextTxt: 'NEXT',
   levelTxt: 'LEVEL',
-  levelNum: '8',
+  levelNum: '6',
   linesTxt: 'LINES',
   oops: 'OOPS',
   winTitle: 'CLEARED!',
@@ -42,8 +44,8 @@ const LINES_TETRIS = {
   hint: 'laptop: ← → move, ↑ or X turn, Z turn back, ↓ soft drop, space hard drop, C hold   |   phone: tap turn, drag move, swipe down drop, tap HOLD',
 };
 
-// gravity in seconds per row: the guideline curve (0.8 - (L-1)*0.007)^(L-1) at level 8 = 0.1347
-const TG = { GOAL: 10, LEVEL: 8, GRAV: Math.pow(0.8 - 7*0.007, 7), COLS: 10, ROWS: 22, HID: 2, CS: 28, LOCK: 0.5, MAXRESET: 15, DAS: 0.14, ARR: 0.03, SOFT: 0.03, FLASH: 0.36, CARDMAX: 6 };
+// gravity in seconds per row: the guideline curve (0.8 - (L-1)*0.007)^(L-1) at level 6 = 0.2620 (level 8 was 0.1347)
+const TG = { GOAL: 10, LEVEL: 6, GRAV: Math.pow(0.8 - 5*0.007, 5), COLS: 10, ROWS: 12, HID: 2, VIS: 10, CS: 30, LOCK: 0.5, MAXRESET: 15, DAS: 0.14, ARR: 0.03, SOFT: 0.03, FLASH: 0.36, CARDMAX: 6 };
 const TCOL = { G: '#8d88a6', I: '#5ad2f0', O: '#FFD21F', T: '#b072e0', S: '#6cc24a', Z: '#e8423b', J: '#3a7bd5', L: '#f59a2f' };
 const TBASE = {
   I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
@@ -80,6 +82,8 @@ const TKICK_I = {
 
 const TT = { state: 'card', keys: {}, das: {dir: 0, t: 0, arr: 0}, g: null, trails: [], holdRect: [0,0,0,0], say: {text: '', t: 0}, jed: {text: '', t: 0}, pop: {text: '', t: 0}, failBag: [], finished: false, queue: [], lines: 0, time: 0, stackH: 0, goal: TG.GOAL, cardT: 0, bump: {t: 0, dur: 0.12, amp: 0}, chips: [], nb: 0, nbAmp: 0.07, deaths: 0 };
 window.TETRIS_DEBUG = TT;
+// how long a bubble stays up: long enough to read (about 1.2 s plus 0.3 s a word), never shorter than before (1.6 s)
+const tSay = text => ({text, t: Math.max(1.6, 1.2 + 0.3*text.split(' ').length)});
 const TCELLS = (t, r, x, y) => TROT[t][r].map(([c, rw]) => [x + c, y + rw]);
 
 function tCollide(t, r, x, y){
@@ -105,7 +109,7 @@ function tReset(again){
 }
 function tStart(){   // the card goes away, the first piece drops, and Nailong is far too confident
   window.SFX && SFX.play('pop');   // the card goes
-  TT.state = 'play'; TT.say = {text: LINES_TETRIS.cardSay, t: 1.8}; TT.jed = {text: LINES_TETRIS.jedStart, t: 1.8}; tSpawn(TT.queue.shift());
+  TT.state = 'play'; TT.say = tSay(LINES_TETRIS.cardSay); TT.jed = tSay(LINES_TETRIS.jedStart); tSpawn(TT.queue.shift());
 }
 function tSpawn(type){
   tRefill();
@@ -117,8 +121,8 @@ function tSpawn(type){
 function tDie(){
   TT.state = 'dead'; TT.deadT = 0; TT.p = null; TT.deaths++;
   if (!TT.failBag.length) TT.failBag = LINES_TETRIS.fail.map((_, i) => i).sort(() => Math.random() - .5);
-  TT.say = {text: LINES_TETRIS.fail[TT.failBag.pop()], t: 1.6};
-  TT.jed = {text: LINES_TETRIS.jedFail[(TT.deaths - 1) % LINES_TETRIS.jedFail.length], t: 1.6};
+  TT.say = tSay(LINES_TETRIS.fail[TT.failBag.pop()]);
+  TT.jed = tSay(LINES_TETRIS.jedFail[(TT.deaths - 1) % LINES_TETRIS.jedFail.length]);
   window.SFX && SFX.play('sad');   // top-out: the sad trombone
   const api = GAMES.tetris.api; api && api.died && api.died();   // ride-wide lives (main.js): once per top-out
 }
@@ -173,8 +177,8 @@ function tLock(hard){
   if (full.length) {
     const n = full.length;
     TT.state = 'clear'; TT.flashT = TG.FLASH; TT.flashRows = full;
-    TT.cheer = n === 4 ? 2.0 : 1.1; if (LINES_TETRIS.clearSay[n - 1]) TT.say = {text: LINES_TETRIS.clearSay[n - 1], t: 1.6};
-    if (n === 4) TT.jed = {text: LINES_TETRIS.jedTetris, t: 1.6};
+    TT.cheer = n === 4 ? 2.0 : 1.1; if (LINES_TETRIS.clearSay[n - 1]) TT.say = tSay(LINES_TETRIS.clearSay[n - 1]);
+    if (n === 4) TT.jed = tSay(LINES_TETRIS.jedTetris);
     TT.pop = {text: LINES_TETRIS.clear[n - 1], t: 1.1, big: n === 4};
     if (n === 4) TT.bump = {t: 0.2, dur: 0.2, amp: 9};
     window.SFX && SFX.play('clear', {p: 1 + 0.12*n});   // higher for more lines, and a Tetris gets the stinger too
@@ -273,7 +277,7 @@ function tUpdate(dt){
   TT.gravAcc += dt;
   while (TT.gravAcc >= iv) { if (tMove(0, 1)) TT.gravAcc -= iv; else { TT.gravAcc = 0; break; } }
   if (tGround()) { TT.lockT += dt; if (TT.lockT >= TG.LOCK) tLock(); } else TT.lockT = 0;
-  if (TT.state === 'play' && TT.stackH >= 14 && TT.panicCd <= 0) { TT.say = {text: LINES_TETRIS.panic[Math.floor(Math.random()*LINES_TETRIS.panic.length)], t: 1.6}; TT.panicCd = 5; }
+  if (TT.state === 'play' && TT.stackH >= 7 && TT.panicCd <= 0) { TT.say = tSay(LINES_TETRIS.panic[Math.floor(Math.random()*LINES_TETRIS.panic.length)]); TT.panicCd = 5; }
 }
 
 // ---------- drawing ----------
@@ -337,6 +341,24 @@ function tCard(t){
   font(22, 600); ctx.fillStyle = '#8a7a52'; ctx.fillText(L.cardGo, W/2, y0 + ch - 34); ctx.globalAlpha = 1;
   ctx.restore();
 }
+// the phone game's on-screen buttons, in the space under the board: move left, move right | turn, drop. Drawn in phone
+// coordinates (story-school2.js draws the same phone, so its zoom lands on these too). Returns the button circles.
+function tPad(sx, top, sw, room){
+  const cy = top + room/2, r = 36, xs = [sx + 66, sx + 152, sx + sw - 152, sx + sw - 66], kinds = ['L', 'R', 'turn', 'drop'], out = [];
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  xs.forEach((x, i) => {
+    ell(x, cy, r, r); ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.stroke();
+    ctx.fillStyle = ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 6;
+    const k = kinds[i];
+    if (k === 'L' || k === 'R') { const d = k === 'L' ? -1 : 1; ctx.beginPath(); ctx.moveTo(x + d*13, cy); ctx.lineTo(x - d*9, cy - 14); ctx.lineTo(x - d*9, cy + 14); ctx.closePath(); ctx.fill(); }
+    else if (k === 'turn') { ctx.beginPath(); ctx.arc(x, cy, 15, -Math.PI*0.35, Math.PI*1.25); ctx.stroke();
+      const ax = x + Math.cos(-Math.PI*0.35)*15, ay = cy + Math.sin(-Math.PI*0.35)*15; ctx.beginPath(); ctx.moveTo(ax + 9, ay - 6); ctx.lineTo(ax - 2, ay - 9); ctx.lineTo(ax + 1, ay + 3); ctx.closePath(); ctx.fill(); }
+    else { ctx.beginPath(); ctx.moveTo(x, cy - 15); ctx.lineTo(x, cy + 4); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - 12, cy + 1); ctx.lineTo(x + 12, cy + 1); ctx.lineTo(x, cy + 15); ctx.closePath(); ctx.fill(); }
+    out.push({x, y: cy, r, k});
+  });
+  ctx.restore();
+  return out;
+}
 function tPhoneStatus(sx, sy, sw){
   const L = LINES_TETRIS;
   font(16, 600); ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(L.phoneTime, sx + 22, sy + 16);
@@ -347,13 +369,13 @@ function tPhoneStatus(sx, sy, sw){
   ctx.fillStyle = '#e8423b'; rr(sx + sw - 51, sy + 12, 6, 8, 2); ctx.fill();
 }
 function tDraw(t){
-  const L = LINES_TETRIS, CS = TG.CS, BW = CS*TG.COLS, BH = CS*20;
+  const L = LINES_TETRIS, CS = TG.CS, BW = CS*TG.COLS, BH = CS*TG.VIS;
   const PW = 470, PH = H - 46, PX = Math.round(W/2 - PW/2), PY = 10, BEZ = 14;
   const SX = PX + BEZ, SY = PY + BEZ, SW = PW - 2*BEZ, SH = PH - 2*BEZ;
   const BX = Math.round(W/2 - BW/2), BY = SY + 36;
   const rowY = r => BY + (r - TG.HID)*CS;
   const dead = TT.state === 'dead', won = TT.state === 'won';
-  const panic = TT.state === 'play' && TT.stackH >= 14, cheering = TT.cheer > 0;
+  const panic = TT.state === 'play' && TT.stackH >= 7, cheering = TT.cheer > 0;
 
   tRoom(t);
   // Jed, behind the desk on the right, watching his phone
@@ -390,7 +412,7 @@ function tDraw(t){
   ctx.fillStyle = '#120d2e'; rr(BX - 5, BY - 5, BW + 10, BH + 10, 8); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#4b4380'; ctx.stroke();
   ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 1;
   for (let c = 1; c < TG.COLS; c++) { ctx.beginPath(); ctx.moveTo(BX + c*CS, BY); ctx.lineTo(BX + c*CS, BY + BH); ctx.stroke(); }
-  for (let r = 1; r < 20; r++) { ctx.beginPath(); ctx.moveTo(BX, BY + r*CS); ctx.lineTo(BX + BW, BY + r*CS); ctx.stroke(); }
+  for (let r = 1; r < TG.VIS; r++) { ctx.beginPath(); ctx.moveTo(BX, BY + r*CS); ctx.lineTo(BX + BW, BY + r*CS); ctx.stroke(); }
   ctx.save(); ctx.beginPath(); ctx.rect(BX - 2, BY, BW + 4, BH + 4); ctx.clip();   // the hidden rows above the board stay hidden
   const dim = dead ? 0.5 : 1;
   for (let r = 1; r < TG.ROWS; r++) for (let c = 0; c < TG.COLS; c++) { const v = TT.board[r][c]; if (v) tTile(BX + c*CS, rowY(r), CS, TCOL[v], dim); }
@@ -421,6 +443,8 @@ function tDraw(t){
   ctx.fillStyle = C.y; rr(BX, gyb, Math.max(gh, BW*clamp(TT.lines/TT.goal, 0, 1)), gh, 15); ctx.fill();
   ctx.lineWidth = 3; ctx.strokeStyle = C.line; rr(BX, gyb, BW, gh, 15); ctx.stroke();
   title(`${L.linesTxt}  ${Math.min(TT.lines, TT.goal)} / ${TT.goal}`, BX + BW/2, gyb + gh/2 + 1, 22, '#fff');
+  // the phone's own touch buttons under the board (a click on one does what it shows)
+  TT.pad = tPad(SX, gyb + gh, SW, SY + SH - (gyb + gh));
 
   // overlays on the board
   const cx = BX + BW/2;
@@ -475,6 +499,8 @@ GAMES.tetris = {
       if (TT.state === 'card') { tStart(); TT.g = null; return; }
       const hr = TT.holdRect;
       if (x >= hr[0] && x <= hr[0] + hr[2] && y >= hr[1] && y <= hr[1] + hr[3]) { tDoHold(); TT.g = null; return; }
+      const b = (TT.pad || []).find(p => Math.hypot(x - p.x, y - p.y) <= p.r + 6);   // the phone's own buttons
+      if (b) { if (b.k === 'L') tMove(-1, 0); else if (b.k === 'R') tMove(1, 0); else if (b.k === 'turn') tRotate(1); else tHard(); TT.g = null; return; }
       TT.g = {sx: x, sy: y, ax: x, ay: y, t0: performance.now(), moved: false};
     } else if (kind === 'move' && TT.g) {
       const g = TT.g, step = CS*0.95;

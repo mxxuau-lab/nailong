@@ -5,9 +5,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Nailong</title>
 <link rel="icon" href="data:,">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<link rel="preload" href="assets/fonts/fredoka-700.woff" as="font" type="font/woff" crossorigin>
+<link rel="preload" href="assets/fonts/fredoka-500.woff" as="font" type="font/woff" crossorigin>
 <style>
+  /* Fredoka (OFL) from our own site, not Google's: a slow network to Google can no longer hold the page up */
+  /* two fixed weights, not the variable file: Safari's engine drew every canvas line thin from the variable one */
+  @font-face{font-family:'Fredoka';font-style:normal;font-weight:500;font-display:swap;src:url(assets/fonts/fredoka-500.woff) format('woff')}
+  @font-face{font-family:'Fredoka';font-style:normal;font-weight:700;font-display:swap;src:url(assets/fonts/fredoka-700.woff) format('woff')}
+  /* shown from the very first paint until main.js starts, so a slow connection never looks like a dead link */
+  #loading{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;color:#FFF3C4;font-size:22px;letter-spacing:.5px;z-index:3}
+  #loading .blob{position:relative;width:96px;height:96px;border-radius:50%;background:#FFD21F;border:6px solid #4A2F0C;animation:bob .6s ease-in-out infinite alternate}
+  #loading .blob::before,#loading .blob::after{content:"";position:absolute;top:34px;width:12px;height:15px;border-radius:50%;background:#1a1a1a}
+  #loading .blob::before{left:26px} #loading .blob::after{right:26px}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-22px)}}
   html,body{margin:0;height:100%;background:#1d1640;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;font-family:Fredoka,"Trebuchet MS",system-ui,sans-serif}
   canvas{display:block;width:100vw;height:100vh}
   #ui{position:fixed;top:10px;right:10px;display:flex;gap:8px;z-index:2}
@@ -20,23 +30,25 @@
 <svg width="0" height="0" style="position:absolute">
   <filter id="crayon"><feTurbulence id="turb" type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="1"/><feDisplacementMap in="SourceGraphic" scale="6"/></filter>
 </svg>
+<div id="loading"><div class="blob"></div><div>Loading Nailong...</div></div>
 <canvas id="c"></canvas>
 <div id="ui"><button id="muteBtn">Sound: on</button><button id="styleBtn" hidden>Style: sticker</button><button id="skipBtn" hidden>Skip ▶</button></div>
 <div id="hint"></div>
-<script src="core.js"></script>
-<script src="sfx.js"></script>
-<script src="story-intro.js"></script>
-<script src="story.js"></script>
-<script src="story-school2.js"></script>
-<script src="story-canberra.js"></script>
-<script src="games/octagon.js"></script>
-<script src="games/tetris.js"></script>
-<script src="games/blockblast.js"></script>
-<script src="games/bottlesort.js"></script>
-<script src="games/runner.js"></script>
-<script src="games/battle.js"></script>
-<script src="games/pingpong.js"></script>
-<script src="menu.js"></script>
-<script src="main.js"></script>
+<script defer src="core.js"></script>
+<script defer src="sfx.js"></script>
+<script defer src="story-intro.js"></script>
+<script defer src="story.js"></script>
+<script defer src="story-chase.js"></script>
+<script defer src="story-school2.js"></script>
+<script defer src="story-canberra.js"></script>
+<script defer src="games/octagon.js"></script>
+<script defer src="games/tetris.js"></script>
+<script defer src="games/blockblast.js"></script>
+<script defer src="games/bottlesort.js"></script>
+<script defer src="games/runner.js"></script>
+<script defer src="games/battle.js"></script>
+<script defer src="games/pingpong.js"></script>
+<script defer src="menu.js"></script>
+<script defer src="main.js"></script>
 </body>
 </html>

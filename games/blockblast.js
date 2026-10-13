@@ -43,6 +43,8 @@ const BB_RC = 17;                // roadblock cell size
 const BB_D0 = BB_GAP * BB_V0 * 1.7, BB_D1 = BB_GAP * BB_V0;   // clear more than 1.7 blocks ahead and the car speeds up
 const BB_CARD = 6;               // the instruction card stays until a key or click, at most 6 s
 const BB_CRASH = 1.5;            // seconds of crash before the instant retry
+const BB_MERCY = 0.15;           // after each crash the car drives 15% slower (counted up to 4 crashes), so a slow player always gets across; 0 turns it off
+const bbV0 = () => BB_V0 / (1 + BB_MERCY * Math.min(BB.fails || 0, 4));   // the steady speed for this try
 const BB_ZAP = 0.25;             // seconds for the spark to fly from the cleared line to the roadblock
 // fallen blocks already on the board at the start (digits are colours): one domino in the tray clears the bottom row
 const BB_FALLEN = [
@@ -235,7 +237,7 @@ function bbScene(t) {
   const fx = W * 0.86, fb = HZ - 46;
   ctx.strokeStyle = '#8a8f99'; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(fx - 22, fb + 6); ctx.lineTo(fx, fb - 40); ctx.lineTo(fx + 22, fb + 6); ctx.moveTo(fx - 9, fb + 6); ctx.lineTo(fx, fb - 40); ctx.lineTo(fx + 9, fb + 6); ctx.stroke();
-  ctx.fillStyle = '#e44'; ctx.fillRect(fx, fb - 40, 12, 7); ctx.fillStyle = '#226'; ctx.fillRect(fx, fb - 40, 5, 4);
+  ctx.fillStyle = '#22408f'; ctx.fillRect(fx, fb - 40, 12, 7); ctx.fillStyle = '#e44'; ctx.fillRect(fx, fb - 40, 5, 4);   // the Australian flag: blue, with a red corner for the Union Jack
   // the lake, all the way down behind the board
   ctx.fillStyle = '#4fa9e0'; ctx.fillRect(-10, HZ, W + 20, H);
   ctx.strokeStyle = C.line; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-10, HZ); ctx.lineTo(W + 10, HZ); ctx.stroke();
@@ -464,7 +466,8 @@ function bbCar(dt) {
   }
   BB.runT += dt;
   const ahead = nb ? nb.u - m - BB.u : 9;
-  let vt = BB_V0 * clamp(1 + (ahead - BB_D0) / BB_D1, 1, 3.2);
+  const v0 = bbV0();
+  let vt = v0 * clamp(1 + (ahead - BB_D0) / BB_D1, 1, 3.2);
   if (BB.stuck && nb) vt = BB_V0 * 5;
   BB.v += (vt - BB.v) * Math.min(1, dt * (BB.stuck ? 4 : 1.6));
   BB.u += BB.v * dt;
@@ -473,11 +476,11 @@ function bbCar(dt) {
   BB.puffT -= dt;
   if (BB.puffT <= 0) { BB.puffT = 0.22; const p = bbPath(BB.u, 140 * BB_CAR); BB.puffs.push({ x: p.x - Math.cos(p.a) * 236 * BB_CAR, y: p.y - Math.sin(p.a) * 236 * BB_CAR - 10, r: 5, t: 0 }); }
   // danger: about 2.8 s from the next block at the current speed
-  const tti = nb ? ahead / Math.max(BB.v, BB_V0) : 99, was = BB.danger;
+  const tti = nb ? ahead / Math.max(BB.v, v0) : 99, was = BB.danger;
   BB.danger = !!nb && tti < 2.8;
   if (BB.danger && !was && !BB.stuck) { BB.dangerTxt = LINES_BB.danger[BB.dangerN % LINES_BB.danger.length]; BB.dangerN++; window.SFX && SFX.play('scream', { g: 0.4 }); }
   if (BB.danger) { BB.beep -= dt; if (BB.beep <= 0) { BB.beep = 0.45; window.SFX && SFX.play('tick', { p: 1.7 }); } } else BB.beep = 0;
-  const fast = BB.v > BB_V0 * 1.7;
+  const fast = BB.v > v0 * 1.7;
   if (fast && !BB.fastOn && !BB.danger && BB.sayT <= 0) { BB.say = LINES_BB.fast[BB.dangerN % LINES_BB.fast.length]; BB.sayT = 1.4; }
   if (fast && !BB.fastOn) window.SFX && SFX.play('engine', { p: 1.3, g: 0.7 });   // catching up: the engine revs
   BB.fastOn = fast;
@@ -628,7 +631,7 @@ function bbDraw(t, dt) {
   bbGeo(); bbLayout();
   bbUpdate(dt);
   ctx.save();
-  if (BB.shake > 0 && !(BB.freeze > 0)) ctx.translate(...fxShake(BB.shake * 2, 7));
+  if (BB.shake > 0 && !(BB.freeze > 0)) { sky(); ctx.fillStyle = '#4fa9e0'; ctx.fillRect(0, BB.g.HZ, W, H); ctx.translate(...fxShake(BB.shake * 2, 7)); }   // sky and lake under the shake, so its edges never flash the page colour
   bbScene(BB.t);
   const { cs, bx, by, bw } = BB;
   // board panel

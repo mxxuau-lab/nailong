@@ -28,10 +28,12 @@ const LINES_CANBERRA = {
   clear: 'CRONY! Clear the road!',               // TODO joke: the hand-off into Block Blast
   happy: 'Happy 18th!',                      // TODO joke
   cheer: 'HOORAY!',
+  bday: 'Happy Birthday!',                   // Max (13 Oct): the card after the finale, before the replay menu
+  bdaySub: 'text me your favorite part :)',  // Max's words
 };
 window.LINES_CANBERRA = LINES_CANBERRA;
 // Escape 10.4 (was 10), Civic 11 (was 10.5), Bridge 12.9 (was 11.8): longer holds so every line reads twice at the 70% clip speed.
-const CANBERRA_DUR = {sceneEscape: 10.4, sceneCivic: 11, sceneBridge: 12.9, sceneParliament: 12, sceneFinale: 12};
+const CANBERRA_DUR = {sceneEscape: 10.4, sceneCivic: 11, sceneBridge: 12.9, sceneParliament: 12, sceneFinale: 12, sceneBirthday: 6.5};
 window.CANBERRA_DUR = CANBERRA_DUR;
 
 // ---------------------------------------------------------------- tiny helpers
@@ -235,11 +237,15 @@ function leafTree(x, gy, s, col = '#8bd24f', dark = '#6eb23c') {
   blobs.forEach(([dx, dy, rx, ry], i) => { ell(x + dx * s, gy + dy * s, rx * s, ry * s); ctx.fillStyle = i % 2 ? dark : col; ctx.fill(); });
 }
 function brindyGate(x, gy) {
-  out(() => rr(x - 70, gy - 150, 18, 150, 3), '#b8644a', 4); out(() => rr(x + 52, gy - 150, 18, 150, 3), '#b8644a', 4);
-  out(() => rr(x - 96, gy - 168, 192, 30, 6), '#e0463e', 4);
-  ctx.lineCap = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = '#f2a0a0'; ctx.beginPath(); ctx.moveTo(x - 70, gy - 140); ctx.bezierCurveTo(x - 60, gy - 172, x - 46, gy - 144, x - 30, gy - 168); ctx.stroke();
-  ctx.strokeStyle = '#2f5fb3'; ctx.beginPath(); ctx.moveTo(x - 68, gy - 148); ctx.bezierCurveTo(x - 58, gy - 166, x - 44, gy - 150, x - 28, gy - 162); ctx.stroke(); ctx.lineCap = 'butt';
-  smallText(LINES_CANBERRA.gate, x + 20, gy - 153, 10, '#fff', 700);
+  // the sign is wide enough for the whole school name beside the logo's two swooshes (the name used to run off the sign and the screen)
+  out(() => rr(x - 86, gy - 150, 18, 150, 3), '#b8644a', 4); out(() => rr(x + 68, gy - 150, 18, 150, 3), '#b8644a', 4);
+  out(() => rr(x - 120, gy - 168, 240, 30, 6), '#e0463e', 4);
+  ctx.save(); ctx.translate(-40, 0);
+  ctx.lineCap = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = '#f2a0a0'; ctx.beginPath(); ctx.moveTo(x - 70, gy - 144); ctx.bezierCurveTo(x - 60, gy - 168, x - 46, gy - 146, x - 30, gy - 164); ctx.stroke();
+  ctx.strokeStyle = '#2f5fb3'; ctx.beginPath(); ctx.moveTo(x - 68, gy - 150); ctx.bezierCurveTo(x - 58, gy - 164, x - 44, gy - 152, x - 28, gy - 160); ctx.stroke(); ctx.lineCap = 'butt';
+  ctx.restore();
+  font(10, 700); const tw = ctx.measureText(LINES_CANBERRA.gate).width, room = 166;
+  smallText(LINES_CANBERRA.gate, x + 25, gy - 153, tw > room ? 10 * room / tw : 10, '#fff', 700);
 }
 function bricks(x, y, w, h, base, line) {
   ctx.fillStyle = base; ctx.fillRect(x, y, w, h); ctx.strokeStyle = line; ctx.lineWidth = 2;
@@ -321,7 +327,7 @@ function sceneEscape(t) {
   ctx.restore();
   ctx.fillStyle = '#6b6f7a'; ctx.fillRect(-10, roadY - 62, W + 20, H); ctx.fillStyle = '#c7c3b8'; ctx.fillRect(-10, roadY - 70, W + 20, 10);
   ctx.strokeStyle = '#ffe9a0'; ctx.lineWidth = 5; ctx.setLineDash([46, 34]); ctx.beginPath(); ctx.moveTo(-10, roadY + 76); ctx.lineTo(W + 10, roadY + 76); ctx.stroke(); ctx.setLineDash([]);
-  brindyGate(W * 0.91, roadY - 66);
+  brindyGate(W - 140, roadY - 66);   // its right edge stays on screen whatever the window width
   const cabLook = t < E.spin ? [0.5, -0.2] : [1, 0];
   const rearX = (cx) => cx + camry.info.rear * carS;
   if (t > E.go && t < E.go + 1.1) {   // Road Runner peel-out: a dust cloud hangs where the car stood, speed lines trail it
@@ -363,7 +369,7 @@ function sceneEscape(t) {
     nailong(x, y, sc, {...o, rot, sx, sy});
   }
   if (t > E.seat + 0.15 && t < E.go - 0.45) bubble(LINES_CANBERRA.wheel, carX0 + 10, roadY - 170, 26, 300);
-  if (t > E.go + 1.3 && t < E.go + 2.7) title(LINES_CANBERRA.beep, Math.min(carX - 60, W - 150), roadY - 200, 36, '#fff');
+  if (t > E.go + 1.3 && t < E.go + 2.7) title(LINES_CANBERRA.beep, Math.min(carX - 60, W - 150), roadY - 275, 36, '#fff');   // above the school gate's sign, not on it
   fadeEdges(t, D);
 }
 // the escape's beats in scene seconds: the window bursts, he lands on the roof, slides in, the wheels spin, the car goes
@@ -569,7 +575,12 @@ function sceneBridge(t) {
   ctx.fillStyle = '#4c8a54'; ctx.fillRect(-10, hz - 26, W + 20, 30);
   for (let x = 0; x < W; x += 46) { ell(x, hz - 26, 30, 22); ctx.fillStyle = (x / 46) % 2 ? '#3f7a4a' : '#559a5c'; ctx.fill(); }
   out(() => rr(W * 0.22, hz - 62, 190, 30, 3), '#e9e3d4', 3); for (let i = 0; i < 12; i++) { ctx.fillStyle = '#9aa0a8'; ctx.fillRect(W * 0.22 + 8 + i * 15, hz - 54, 6, 22); }
-  ctx.strokeStyle = '#cfd5dc'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(W * 0.86, hz - 26); ctx.lineTo(W * 0.86 - 22, hz - 80); ctx.moveTo(W * 0.86, hz - 26); ctx.lineTo(W * 0.86 + 22, hz - 80); ctx.moveTo(W * 0.86, hz - 26); ctx.lineTo(W * 0.86, hz - 110); ctx.stroke();
+  // Parliament House's flagpole across the lake: the legs stand apart on the ground and meet at the top, the mast and flag above
+  // (it was drawn upside down, legs meeting at the ground, and read as a down arrow)
+  { const fx = W * 0.86, fb = hz - 26, ap = fb - 58;
+    ctx.strokeStyle = '#cfd5dc'; ctx.lineWidth = 3; ctx.beginPath();
+    ctx.moveTo(fx - 24, fb); ctx.lineTo(fx, ap); ctx.lineTo(fx + 24, fb); ctx.moveTo(fx - 9, fb); ctx.lineTo(fx, ap); ctx.lineTo(fx + 9, fb); ctx.moveTo(fx, ap); ctx.lineTo(fx, ap - 30); ctx.stroke();
+    ctx.fillStyle = '#22408f'; ctx.fillRect(fx, ap - 30, 14, 8); }
   const wg = ctx.createLinearGradient(0, hz, 0, H); wg.addColorStop(0, '#5eb0e6'); wg.addColorStop(1, '#2f7fc4'); ctx.fillStyle = wg; ctx.fillRect(-20, hz, W + 40, H);
   ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
   for (let i = 0; i < 14; i++) { const yy = hz + 18 + (i * 29) % 160, xx = ((i * 211 - scroll * 0.2 + t * 14) % (W + 200) + W + 200) % (W + 200) - 100; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx + 40 + (i % 3) * 14, yy); ctx.stroke(); }
@@ -648,7 +659,7 @@ function sceneBridge(t) {
     ctx.restore();
   }
   const say = [cx + camry.info.seat[0] * carS, carY - 135];
-  if (t > BR.wetSay && t < BR.wetSay + BR_SAY.wetSay) bubble(LINES_CANBERRA.dry, say[0], say[1], 26, 320);
+  if (t > BR.wetSay && t < BR.wetSay + BR_SAY.wetSay) bubble(LINES_CANBERRA.dry, say[0], say[1], 26, 420);   // wide enough for one line (it used to leave "dragon." alone on a second line)
   if (t > BR.why && t < BR.why + BR_SAY.why) bubble(LINES_CANBERRA.blocks, say[0], say[1], 26, 340);
   if (t > BR.clear) { const q = P(t, BR.clear, BR.clear + 0.3); ctx.save(); ctx.translate(say[0] + 40, say[1] - 30); ctx.scale(0.8 + 0.2 * q, 0.8 + 0.2 * q); bubble(LINES_CANBERRA.clear, 0, 10, 30, 380); ctx.restore(); }
   ctx.restore();
@@ -729,10 +740,10 @@ function sceneParliament(t) {
   const doorK = t < 2.2 ? 0 : t < 3.4 ? clamp((t - 2.2) / 0.3, 0, 1) : 1 - clamp((t - 3.4) / 0.4, 0, 1);
   const hop = P(t, 2.7, 3.4);
   camry(carX, rowF + 16, carS, {wheel: carX / 33, door: doorK, driver: t < 2.7, lean, look: [1, 0]});
-  // teachers wave from behind: Mr Shou and Liu Lao Shi, drawn by their own games' functions if those are loaded
+  // teachers wave from behind: Mr Shou and Liu Lao Shi, drawn by their own games' functions if those are loaded; they wait fully below the screen until they pop up (they used to peek in half-sunk from the first frame)
   const rise = e => easeOut(P(t, e, e + 0.5));
-  if (typeof window.shou === 'function') window.shou(W * 0.74, rowB + 70 + (1 - rise(3.6)) * 120, 0.4, {mouth: 'grin', armR: 2.5 + Math.sin(t * 9) * 0.35, armL: 0.12});
-  if (typeof window.liuLaoShi === 'function') window.liuLaoShi(W * 0.86, rowB + 70 + (1 - rise(3.9)) * 120, 0.4, {mouth: 'smile', aR: 2.5 + Math.sin(t * 9 + 1) * 0.35});
+  if (typeof window.shou === 'function') window.shou(W * 0.74, rowB + 70 + (1 - rise(3.6)) * 260, 0.4, {mouth: 'grin', armR: 2.5 + Math.sin(t * 9) * 0.35, armL: 0.12});
+  if (typeof window.liuLaoShi === 'function') window.liuLaoShi(W * 0.86, rowB + 70 + (1 - rise(3.9)) * 260, 0.4, {mouth: 'smile', aR: 2.5 + Math.sin(t * 9 + 1) * 0.35});
   // Scarlett and Jedidiah run in from the right and cheer (Scarlett is the tall one)
   const rin = easeOut(P(t, 3.1, 4.5));
   const sX = lerp(W * 1.1, W * 0.37, rin), jX = lerp(W * 1.2, W * 0.62, rin);
@@ -762,6 +773,29 @@ function sceneParliament(t) {
     ctx.save(); ctx.translate(W / 2, H * 0.16); ctx.scale(pop, pop); ctx.rotate(Math.sin(t * 3) * 0.03); title(LINES_CANBERRA.happy, 0, 0, Math.min(112, W / 9), '#ffd21f'); ctx.restore(); }
   fadeEdges(t, D);
 }
+// the birthday card (Max, 13 Oct): "Happy Birthday!" and his line under it, then the replay menu. About 9 s at the clip speed.
+const BDAY_SFX = [[0.35, 'pop', {p: 0.8, g: 0.8}], [0.4, 'jingle'], [1.7, 'pop', {p: 1.5, g: 0.5}], ...[1.2, 1.77, 2.34, 2.91, 3.48].map((x, i) => [x, 'boing', {p: 1.3 + i*0.04, g: 0.25}])];
+function sceneBirthday(t) {
+  const D = CANBERRA_DUR.sceneBirthday;
+  cbCues('birthday', t, BDAY_SFX);
+  ctx.fillStyle = '#1d1640'; ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 40; i++) {   // twinkling stars
+    const r1 = Math.abs(Math.sin(i * 91.7) * 43758.5453 % 1), r2 = Math.abs(Math.sin(i * 12.9) * 24634.6345 % 1);
+    ctx.save(); ctx.globalAlpha = 0.35 + 0.35 * Math.sin(t * 2.4 + i); star4(r1 * W, r2 * H * 0.9, 5 + (i % 3) * 2, t * 0.5 + i, '#fff6b0'); ctx.restore();
+  }
+  confetti(0.35, t, 60, W * 0.08, H * 0.98, 1.3, 2); confetti(0.35, t, 60, W * 0.92, H * 0.98, 1.3, 9); confetti(2.6, t, 50, W * 0.5, H * 0.98, 1.8, 4);
+  const ty = H * 0.34;
+  if (t > 0.35) { const k = (t - 0.35) / 0.55, pop = fxBack(k);
+    ctx.save(); ctx.translate(W / 2, ty); ctx.scale(pop, pop); ctx.rotate(Math.sin(t * 2.6) * 0.025); title(LINES_CANBERRA.bday, 0, 0, Math.min(120, W / 8.5), '#ffd21f'); ctx.restore(); }
+  const sa = P(t, 1.7, 2.3);
+  if (sa > 0) { ctx.save(); ctx.globalAlpha = sa; smallText(LINES_CANBERRA.bdaySub, W / 2, ty + Math.min(110, W / 9) + (1 - easeOut(sa)) * 14, Math.min(44, W / 24), '#fff3c4', 600); ctx.restore(); }
+  const b = Math.max(0, t - 1.2) * 5.5, j = t > 1.2 ? Math.abs(Math.sin(b)) : 0, ph = (b % Math.PI) / Math.PI, sq = t > 1.2 && (ph < 0.12 || ph > 0.88);
+  const ny = H * 0.9 - j * 60, nx = W / 2;
+  ell(nx, H * 0.9 + 4, 40 - j * 10, 9); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fill();
+  nailong(nx, ny, 0.5, {arms: 'up', flail: t * 14, look: [0, -0.4], mouth: 'open', sx: 1 - 0.1 * j + (sq ? 0.2 : 0), sy: 1 + 0.18 * j - (sq ? 0.22 : 0)});
+  fadeEdges(t, D);
+}
+window.sceneBirthday = sceneBirthday;
 window.sceneParliament = sceneParliament;
 window.sceneFinale = sceneParliament;   // the finale is the second half of the Parliament clip: put only ONE of the two in FLOW
 window.sceneEscape = sceneEscape; window.sceneCivic = sceneCivic; window.sceneBridge = sceneBridge;

@@ -200,16 +200,49 @@ function wallQuad(x, za, zb, y0, y1, fill, stroke, lw){
   poly([PJ(x, y0, za), PJ(x, y0, zb), PJ(x, y1, zb), PJ(x, y1, za)], fill, stroke, lw);
 }
 function floorQuad(xa, xb, za, zb, fill){ if (zb <= za) return; poly([PJ(xa, 0, za), PJ(xb, 0, za), PJ(xb, 0, zb), PJ(xa, 0, zb)], fill); }
-// draw in a local box (w x h units, y down) mapped onto a plane given by 3 screen points
-function plane(p0, pu, pv, w, h, fn){
-  ctx.save(); ctx.transform((pu[0]-p0[0])/w, (pu[1]-p0[1])/w, (pv[0]-p0[0])/h, (pv[1]-p0[1])/h, p0[0], p0[1]); fn(); ctx.restore();
-}
 // a stretch of a wall (side, from z to z + len, y0..y1) as a flat picture: local box (len*100 x (y1-y0)*100), x runs along the
-// street as she sees it (far to near on the right, near to far on the left), y down from the top
-function facade(side, x, za, zb, y0, y1, fn){
-  if (zb <= NEAR + 0.05) return; za = Math.max(za, NEAR + 0.05);
-  const p0 = side > 0 ? PJ(x, y1, zb) : PJ(x, y1, za), pu = side > 0 ? PJ(x, y1, za) : PJ(x, y1, zb), pv = side > 0 ? PJ(x, y0, zb) : PJ(x, y0, za);
-  plane(p0, pu, pv, (zb - za)*100, (y1 - y0)*100, () => fn((zb - za)*100, (y1 - y0)*100));
+// street as she sees it (far to near on the right, near to far on the left), y down from the top. key names the picture.
+// Used for lettering only (the shop signs, the works hoarding, the Canberra Centre's name); the buildings themselves are drawn
+// straight onto the wall with wallMap below. A wall is the plane x = const: in perspective its vertical lines stay vertical
+// but shrink with distance, which a canvas transform cannot do (it is affine). The old version mapped every wall picture with
+// one transform, so they came out as slanted parallelograms that slid off their walls (sheared arches, the cream band running
+// out over the footpath, signs and windows tilting) and squeezed as the wall passed her. Now the lettering is drawn once into
+// its own small canvas (bakeFacades, at the start of the next frame) and laid on the wall in thin vertical slices, each one
+// scaled to the wall's true height at its distance and clipped to its outline.
+const FAC = new Map(), FAC_Q = new Map(), FAC_RES = 1, FAC_SLICE = 2.5;   // picture pixels per local unit (less if the screen is small), slice width
+function facade(key, side, x, za, zb, y0, y1, fn){
+  if (zb <= NEAR + 0.05) return;
+  const w = (zb - za)*100, h = (y1 - y0)*100, fontsIn = !document.fonts || !document.fonts.check || document.fonts.check('700 20px Fredoka');
+  const k = key + '|' + w.toFixed(0) + '|' + h.toFixed(0) + (fontsIn ? '' : '|fallback'), img = FAC.get(k);
+  if (!img) { if (!FAC_Q.has(k)) FAC_Q.set(k, {w, h, fn}); return; }
+  const X = x - RC.camx, f = RC.f, zn = Math.max(za, NEAR + 0.05); if (Math.abs(X) < 1e-3) return;
+  const sxOf = z => RC.cx + X*f/z, zOf = sx => X*f/(sx - RC.cx), uOf = z => side > 0 ? (zb - z)/(zb - za) : (z - za)/(zb - za);
+  const s0 = Math.max(Math.min(sxOf(zn), sxOf(zb)), -4), s1 = Math.min(Math.max(sxOf(zn), sxOf(zb)), W + 4); if (s1 <= s0) return;
+  ctx.save(); ctx.beginPath(); [PJ(x, y0, zn), PJ(x, y0, zb), PJ(x, y1, zb), PJ(x, y1, zn)].forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.clip();
+  const slice = clamp(2*Math.abs(X)/(y1 - y0), FAC_SLICE, 16);   // a slice is off by at most a pixel at its edges, so a short sign takes wide slices
+  const n = Math.max(1, Math.ceil((s1 - s0)/slice)), iw = img.width, ih = img.height, ov = ctx.globalAlpha > 0.99 ? 0.6 : 0;   // slices overlap a hair to hide seams, but not when see-through (the overlaps would show as stripes)
+  for (let i = 0; i < n; i++) {
+    const a = s0 + (s1 - s0)*i/n, b = s0 + (s1 - s0)*(i + 1)/n, zm = zOf((a + b)/2);
+    let u0 = clamp(uOf(zOf(a)), 0, 1), u1 = clamp(uOf(zOf(b)), 0, 1); if (u0 > u1) [u0, u1] = [u1, u0];
+    if (u1 - u0 < 1e-5 || !(zm > 0)) continue;
+    const top = RC.hy + (RC.camH - y1)*f/zm, bot = RC.hy + (RC.camH - y0)*f/zm;
+    ctx.drawImage(img, u0*iw, 0, Math.max(0.01, (u1 - u0)*iw), ih, a, top, b - a + ov, bot - top);
+  }
+  ctx.restore();
+}
+// the pictures asked for last frame, drawn on the main canvas as scratch before the sky covers it, then copied to their own canvases
+function bakeFacades(){
+  if (!FAC_Q.size) return;
+  for (const [k, q] of FAC_Q) {
+    const r = Math.min(FAC_RES, (cv.width - 4)/q.w, (cv.height - 4)/q.h), pw = Math.max(1, Math.ceil(q.w*r)), ph = Math.max(1, Math.ceil(q.h*r));
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.clearRect(0, 0, pw + 4, ph + 4); ctx.setTransform(r, 0, 0, r, 0, 0);
+    try { q.fn(q.w, q.h); } catch (e) { console.warn('RUNNER facade ' + k + ' failed: ' + e.message); }
+    ctx.restore();
+    const c = document.createElement('canvas'); c.width = pw; c.height = ph; c.getContext('2d').drawImage(cv, 0, 0, pw, ph, 0, 0, pw, ph);
+    FAC.set(k, c);
+  }
+  FAC_Q.clear();
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); ctx.restore();
 }
 function fitText(text, w, h, col, maxPx){
   let px = maxPx || h*0.7; font(px, 700); const tw = ctx.measureText(text).width; if (tw > w*0.92) px *= w*0.92/tw; font(px, 700);
@@ -406,83 +439,99 @@ function shopFront(side, j, z0, h){   // City Walk shops: two storeys, glass, a 
     const a = z0 + 0.5 + i*1.5, b = a + 1.5; if (b <= NEAR) continue; const aa = Math.max(a, NEAR);
     poly([PJ(x, 2.85, aa), PJ(x, 2.85, b), PJ(x - side*dep, 2.35, b), PJ(x - side*dep, 2.35, aa)], i % 2 ? aw[1] : aw[0], C.line, 1.5);
   }
-  if ((h % 3) !== 0 && z0 > NEAR && z0 < 80) sign(side, x, z0 + 1.2, z0 + 8.8, 3.35, 4.55, (side > 0 ? LINES_RUNNER.signsR : LINES_RUNNER.signsL)[(h >>> 9) % 7], (h >>> 4) & 1, z0);
+  if ((h % 3) !== 0 && z0 + 8.8 > NEAR) sign(side, x, z0 + 1.2, z0 + 8.8, 3.35, 4.55, (side > 0 ? LINES_RUNNER.signsR : LINES_RUNNER.signsL)[(h >>> 9) % 7], (h >>> 4) & 1, z0);
 }
 function sign(side, x, zn, zf, y0, y1, name, dark, z0){
-  const pa = ctx.globalAlpha; ctx.globalAlpha = pa*clamp((z0 - 1.5)/6, 0, 1);
-  facade(side, x - side*0.02, zn, zf, y0, y1, (w, h) => {
+  // in true perspective now, so a sign stays solid all the way past her (it used to fade out close up, and to pop in at 80)
+  facade('sign|' + name + '|' + (dark ? 1 : 0), side, x - side*0.02, zn, zf, y0, y1, (w, h) => {
     rr(0, 0, w, h, 8); ctx.fillStyle = dark ? '#1d1640' : '#fff'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = C.line; ctx.stroke();
     fitText(name, w, h, dark ? '#ffd21f' : '#4A2F0C', h*0.62);
   });
-  ctx.globalAlpha = pa;
 }
+// The big wall pictures are drawn straight onto the wall plane in true perspective: m(u, v) takes a point of the picture's
+// local box (w x h, 100 units a metre, u along the street as she sees it, v down from the top) to the screen. A wall is flat,
+// so straight lines stay straight and a rectangle is just its four projected corners; the arches' curves are short polylines.
+function wallMap(side, x, za, zb, y0, y1, w, h){
+  const zOf = u => Math.max(NEAR + 0.05, side > 0 ? zb - u/w*(zb - za) : za + u/w*(zb - za));
+  const m = (u, v) => PJ(x, y1 - v/h*(y1 - y0), zOf(u));
+  m.px = u => RC.f/zOf(u)/100;   // screen pixels per local unit at u (line widths)
+  return m;
+}
+function wPoly(m, pts, fill, stroke, lw){
+  ctx.beginPath(); pts.forEach(([u, v], i) => { const p = m(u, v); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }); ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = Math.max(0.4, lw); ctx.lineJoin = 'round'; ctx.stroke(); }
+}
+function wRect(m, u, v, rw, rh, fill, stroke, lw){ wPoly(m, [[u, v], [u + rw, v], [u + rw, v + rh], [u, v + rh]], fill, stroke, stroke ? lw*m.px(u + rw/2) : 0); }
+function wLine(m, u0, v0, u1, v1, col, lw){ const a = m(u0, v0), b = m(u1, v1); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.4, lw*m.px((u0 + u1)/2)); ctx.stroke(); }
 // the Sydney Building (east, her left) and the Melbourne Building (west, her right): cream render, a ground-floor arcade of
 // round arches, square upper windows, a terracotta tile roof
 function arcadeFront(side, z0){
-  const x = side*6.3;
+  const x = side*6.3, w = 1000, h = 520;
   wallQuad(x, z0, z0 + 10, 0, 5.2, '#efe3c6', C.line, 3);
-  facade(side, x, z0, z0 + 10, 0, 5.2, (w, h) => {
-    ctx.lineWidth = 6; ctx.strokeStyle = C.line; ctx.lineJoin = 'round';
+  if (z0 + 10 > NEAR + 0.05) {
+    const m = wallMap(side, x, z0, z0 + 10, 0, 5.2, w, h);
     for (let i = 0; i < 4; i++) {   // arches
-      const ax = w*(0.06 + i*0.24), aw = w*0.17, top = h*0.42;
-      ctx.beginPath(); ctx.moveTo(ax, h); ctx.lineTo(ax, top + aw/2); ctx.arc(ax + aw/2, top + aw/2, aw/2, Math.PI, 0); ctx.lineTo(ax + aw, h); ctx.closePath(); ctx.fillStyle = '#6b4f37'; ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#3f2c1f'; ctx.fillRect(ax + aw*0.15, h*0.78, aw*0.7, h*0.22);
-      ctx.fillStyle = '#8fb4c9'; ctx.fillRect(ax + aw*0.2, h*0.12, aw*0.6, h*0.18); ctx.strokeRect(ax + aw*0.2, h*0.12, aw*0.6, h*0.18);
+      const ax = w*(0.06 + i*0.24), aw = w*0.17, top = h*0.42, cx = ax + aw/2, cy = top + aw/2, pts = [[ax, h], [ax, cy]];
+      for (let k = 1; k < 12; k++) { const a = Math.PI*(1 + k/12); pts.push([cx + Math.cos(a)*aw/2, cy + Math.sin(a)*aw/2]); }
+      pts.push([ax + aw, cy], [ax + aw, h]);
+      wPoly(m, pts, '#6b4f37', C.line, 6*m.px(cx));
+      wRect(m, ax + aw*0.15, h*0.78, aw*0.7, h*0.22, '#3f2c1f');
+      wRect(m, ax + aw*0.2, h*0.12, aw*0.6, h*0.18, '#8fb4c9', C.line, 6);
     }
-    ctx.fillStyle = '#e2d3b0'; ctx.fillRect(0, h*0.36, w, h*0.03);
-  });
+    wRect(m, 0, h*0.36, w, h*0.03, '#e2d3b0');
+  }
   // terracotta roof: a band leaning back over the top
   const za = Math.max(z0, NEAR); if (z0 + 10 > za) poly([PJ(x, 5.2, za), PJ(x, 5.2, z0 + 10), PJ(x + side*0.9, 5.9, z0 + 10), PJ(x + side*0.9, 5.9, za)], '#b5532f', C.line, 3);
 }
 function towerFront(side, z0, h){   // Northbourne office towers: glass and concrete bands
-  const x = side*6.3, hgt = 9 + (h % 3)*1.6, glass = (h >>> 2) & 1;
+  const x = side*6.3, hgt = 9 + (h % 3)*1.6, glass = (h >>> 2) & 1, w = 1000, hh = hgt*100;
   wallQuad(x, z0, z0 + 10, 0, hgt, glass ? '#7fa9d6' : '#d9d3c6', C.line, 3);
-  facade(side, x, z0, z0 + 10, 0, hgt, (w, hh) => {
-    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(74,47,12,.55)';
-    for (let y = hh - 260; y > 40; y -= 120) { ctx.fillStyle = glass ? '#5f8fc4' : '#7f9bb4'; ctx.fillRect(w*0.04, y - 70, w*0.92, 70); ctx.strokeRect(w*0.04, y - 70, w*0.92, 70); if (glass) { ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(w*0.04, y - 70, w*0.92, 14); } }
-    ctx.fillStyle = '#5a5f68'; ctx.fillRect(0, hh - 230, w, 230); ctx.fillStyle = '#9fd0ea'; ctx.fillRect(w*0.08, hh - 200, w*0.84, 190);
-    ctx.lineWidth = 6; ctx.strokeStyle = C.line; ctx.strokeRect(w*0.08, hh - 200, w*0.84, 190);
-  });
+  if (z0 + 10 <= NEAR + 0.05) return;
+  const m = wallMap(side, x, z0, z0 + 10, 0, hgt, w, hh);
+  for (let y = hh - 260; y > 40; y -= 120) { wRect(m, w*0.04, y - 70, w*0.92, 70, glass ? '#5f8fc4' : '#7f9bb4', 'rgba(74,47,12,.55)', 4); if (glass) wRect(m, w*0.04, y - 70, w*0.92, 14, 'rgba(255,255,255,.25)'); }
+  wRect(m, 0, hh - 230, w, 230, '#5a5f68'); wRect(m, w*0.08, hh - 200, w*0.84, 190, '#9fd0ea', C.line, 6);
 }
 function garemaCourt(side, z0){   // Garema Court: a pale cream block with deep-set square windows
-  const x = side*WALL_X;
+  const x = side*WALL_X, w = 1000, h = 840;
   wallQuad(x, z0, z0 + 10, 0, 8.4, '#efe3c8', C.line, 3);
-  facade(side, x, z0, z0 + 10, 0, 8.4, (w, h) => {
-    ctx.lineWidth = 5; ctx.strokeStyle = C.line;
-    for (let r = 0; r < 5; r++) for (let c = 0; c < 7; c++) { const wx = w*0.05 + c*w*0.135, wy = 40 + r*120; ctx.fillStyle = '#7f9bb4'; ctx.fillRect(wx, wy, w*0.09, 80); ctx.strokeRect(wx, wy, w*0.09, 80); ctx.fillStyle = 'rgba(74,47,12,.3)'; ctx.fillRect(wx, wy, w*0.09, 14); }
-    ctx.fillStyle = '#9fd0ea'; ctx.fillRect(w*0.04, h - 220, w*0.92, 200); ctx.strokeRect(w*0.04, h - 220, w*0.92, 200);
-  });
+  if (z0 + 10 <= NEAR + 0.05) return;
+  const m = wallMap(side, x, z0, z0 + 10, 0, 8.4, w, h);
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 7; c++) { const wx = w*0.05 + c*w*0.135, wy = 40 + r*120; wRect(m, wx, wy, w*0.09, 80, '#7f9bb4', C.line, 5); wRect(m, wx, wy, w*0.09, 14, 'rgba(74,47,12,.3)'); }
+  wRect(m, w*0.04, h - 220, w*0.92, 200, '#9fd0ea', C.line, 5);
 }
 // the Canberra Centre: white and grey panels over glass; at the entrance the steel-and-glass gable with the name on a grey band
 function centreFront(side, z0, j){
-  const x = side*WALL_X, entrance = j === 72;
+  const x = side*WALL_X, entrance = j === 72, w = 1000, top = entrance ? 8.6 : 6.4, h = top*100;
   wallQuad(x, z0, z0 + 10, 0, 6.4, '#eef0f2', C.line, 3);
-  facade(side, x, z0, z0 + 10, 0, entrance ? 8.6 : 6.4, (w, h) => {
-    ctx.lineWidth = 5; ctx.strokeStyle = C.line; ctx.lineJoin = 'round';
-    if (entrance) {
-      ctx.beginPath(); ctx.moveTo(w*0.15, h); ctx.lineTo(w*0.15, h*0.33); ctx.lineTo(w*0.5, h*0.03); ctx.lineTo(w*0.85, h*0.33); ctx.lineTo(w*0.85, h); ctx.closePath(); ctx.fillStyle = '#a9d2e3'; ctx.fill(); ctx.stroke();
-      ctx.strokeStyle = '#3f6b4a'; ctx.lineWidth = 4;
-      for (let i = 1; i < 6; i++) { const xx = w*(0.15 + i*0.7/6); ctx.beginPath(); ctx.moveTo(xx, h); ctx.lineTo(xx, h*0.33 - (0.35 - Math.abs(i/6 - 0.5))*h*0.86 + h*0.0); ctx.stroke(); }
-      for (const yy of [0.45, 0.62]) { ctx.beginPath(); ctx.moveTo(w*0.15, h*yy); ctx.lineTo(w*0.85, h*yy); ctx.stroke(); }
-      ctx.strokeStyle = C.line; ctx.lineWidth = 5; ctx.fillStyle = '#8b939c'; ctx.fillRect(w*0.12, h*0.7, w*0.76, h*0.09); ctx.strokeRect(w*0.12, h*0.7, w*0.76, h*0.09);
-      ctx.save(); ctx.translate(w*0.12, h*0.7); fitText(LINES_RUNNER.centre, w*0.76, h*0.09, '#fff', h*0.06); ctx.restore();
-      ctx.fillStyle = '#5c6670'; ctx.fillRect(w*0.4, h*0.82, w*0.2, h*0.18); ctx.strokeRect(w*0.4, h*0.82, w*0.2, h*0.18);
-    } else {
-      for (let i = 0; i < 3; i++) { ctx.fillStyle = '#c9cfd6'; ctx.fillRect(w*(0.05 + i*0.32), h*0.12, w*0.26, h*0.3); ctx.strokeRect(w*(0.05 + i*0.32), h*0.12, w*0.26, h*0.3); }
-      ctx.fillStyle = '#9fd0ea'; ctx.fillRect(w*0.03, h*0.55, w*0.94, h*0.43); ctx.strokeRect(w*0.03, h*0.55, w*0.94, h*0.43);
-      ctx.strokeStyle = 'rgba(74,47,12,.5)'; for (let i = 1; i < 5; i++) { ctx.beginPath(); ctx.moveTo(w*0.03 + i*w*0.188, h*0.55); ctx.lineTo(w*0.03 + i*w*0.188, h*0.98); ctx.stroke(); }
-    }
-  });
+  if (z0 + 10 <= NEAR + 0.05) return;
+  const m = wallMap(side, x, z0, z0 + 10, 0, top, w, h);
+  if (entrance) {
+    wPoly(m, [[w*0.15, h], [w*0.15, h*0.33], [w*0.5, h*0.03], [w*0.85, h*0.33], [w*0.85, h]], '#a9d2e3', C.line, 5*m.px(w*0.5));
+    for (let i = 1; i < 6; i++) { const xx = w*(0.15 + i*0.7/6); wLine(m, xx, h, xx, h*0.33 - (0.35 - Math.abs(i/6 - 0.5))*h*0.86, '#3f6b4a', 4); }
+    for (const yy of [0.45, 0.62]) wLine(m, w*0.15, h*yy, w*0.85, h*yy, '#3f6b4a', 4);
+    wRect(m, w*0.12, h*0.7, w*0.76, h*0.09, '#8b939c', C.line, 5);
+    // the name is lettering, so it goes on as a sliced picture over the band
+    const zA = side > 0 ? z0 + 10 - 0.88*10 : z0 + 0.12*10, zB = zA + 0.76*10;
+    facade('centreName', side, x - side*0.02, zA, zB, top*(1 - 0.79), top*(1 - 0.7), (bw, bh) => fitText(LINES_RUNNER.centre, bw, bh, '#fff', bh*0.67));
+    wRect(m, w*0.4, h*0.82, w*0.2, h*0.18, '#5c6670', C.line, 5);
+  } else {
+    for (let i = 0; i < 3; i++) wRect(m, w*(0.05 + i*0.32), h*0.12, w*0.26, h*0.3, '#c9cfd6', C.line, 5);
+    wRect(m, w*0.03, h*0.55, w*0.94, h*0.43, '#9fd0ea', C.line, 5);
+    for (let i = 1; i < 5; i++) wLine(m, w*0.03 + i*w*0.188, h*0.55, w*0.03 + i*w*0.188, h*0.98, 'rgba(74,47,12,.5)', 5);
+  }
 }
 function lowFront(side, z0, h){   // London Circuit: low offices set back behind the verge
-  const x = side*7.6, hgt = 3.6 + (h % 3)*0.8, col = ['#e6dcc8', '#d9c9b0', '#cfd6dc'][(h >>> 3) % 3];
+  const x = side*7.6, hgt = 3.6 + (h % 3)*0.8, col = ['#e6dcc8', '#d9c9b0', '#cfd6dc'][(h >>> 3) % 3], w = 1000, hh = hgt*100;
   wallQuad(x, z0, z0 + 10, 0, hgt, col, C.line, 3);
-  facade(side, x, z0, z0 + 10, 0, hgt, (w, hh) => { ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(74,47,12,.6)'; for (let y = 50; y < hh - 60; y += 110) { ctx.fillStyle = '#8fb4c9'; ctx.fillRect(w*0.05, y, w*0.9, 60); ctx.strokeRect(w*0.05, y, w*0.9, 60); } });
+  if (z0 + 10 <= NEAR + 0.05) return;
+  const m = wallMap(side, x, z0, z0 + 10, 0, hgt, w, hh);
+  for (let y = 50; y < hh - 60; y += 110) wRect(m, w*0.05, y, w*0.9, 60, '#8fb4c9', 'rgba(74,47,12,.6)', 4);
 }
 function worksFence(side, z0){   // the light rail to Woden hoarding along London Circuit
-  const x = side*3.95, pa = ctx.globalAlpha;
+  const x = side*3.95;
   wallQuad(x, z0, z0 + 10, 0, 1.9, '#2a3b8f', C.line, 3);
-  if (z0 > 2 && z0 < 70) { ctx.globalAlpha = pa*clamp((z0 - 2)/6, 0, 1); facade(side, x - side*0.02, z0 + 0.8, z0 + 9.2, 0.35, 1.6, (w, h) => fitText(LINES_RUNNER.works, w, h, '#fff', h*0.5)); ctx.globalAlpha = pa; }
+  if (z0 + 9.2 > NEAR) { facade('works', side, x - side*0.02, z0 + 0.8, z0 + 9.2, 0.35, 1.6, (w, h) => fitText(LINES_RUNNER.works, w, h, '#fff', h*0.5)); }   // solid all the way past her, like the signs
 }
 function drawWall(side, j){
   const s0 = j*10, z0 = s0 - R.pos + PZ;
@@ -523,7 +572,7 @@ function merryGoRound(z){
   ctx.strokeStyle = C.line; ctx.lineWidth = 0.07;
   for (const fx of [-1.7, 1.7]) { ctx.beginPath(); ctx.moveTo(fx, -3.6); ctx.lineTo(fx, -5.3); ctx.stroke(); ctx.save(); ctx.translate(fx, -5.3); ctx.scale(1 + Math.sin(R.time*5 + fx)*0.12, 1); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0.75, 0.2); ctx.lineTo(0, 0.45); ctx.closePath(); ctx.fillStyle = '#ffb347'; ctx.fill(); ctx.stroke(); ctx.restore(); }
   ctx.restore();
-  const px = Math.min(k*0.9, 46); if (px >= 9) { const [sx, sy] = PJ(-8.2, 9.0, z); title(LINES_RUNNER.merry, clamp(sx, 20 + px*3, W - 20), Math.max(sy, 82), px, '#fff7d6'); }
+  const px = Math.min(k*0.9, 46); if (px >= 9) { const [sx, sy] = PJ(-8.2, 9.0, z); font(px); const hw = ctx.measureText(LINES_RUNNER.merry).width/2 + px*0.2; title(LINES_RUNNER.merry, clamp(sx, 10 + hw, W - 10 - hw), Math.max(sy, 82), px, '#fff7d6'); }
 }
 // the glass pyramid fountain in front of the Canberra Centre
 function pyramidFountain(z){
@@ -547,7 +596,7 @@ function drawJet(z){
     ell(sw, -0.6 - i*1.35, r, 0.95); ctx.fillStyle = i % 2 ? '#ffffff' : '#dff3ff'; ctx.fill(); ctx.stroke();
   }
   ctx.restore();
-  const px = Math.min(k*1.3, 52); if (px >= 9) { const [sx, sy] = PJ(-26, 24, z); title(LINES_RUNNER.jet, clamp(sx, 20 + px*4, W - 20), Math.max(sy, 82), px, '#fff7d6'); }
+  const px = Math.min(k*1.3, 52); if (px >= 9) { const [sx, sy] = PJ(-26, 24, z); font(px); const hw = ctx.measureText(LINES_RUNNER.jet).width/2 + px*0.2; title(LINES_RUNNER.jet, clamp(sx, 10 + hw, W - 10 - hw), Math.max(sy, 82), px, '#fff7d6'); }
 }
 // the arch for checkpoints and the finish
 function drawArch(s, text, col){
@@ -628,11 +677,16 @@ function drawGround(){
 function drawWorld(){
   RC.hy = H*0.30; RC.f = H*0.52*(1 + 0.17*R.boostV); RC.camH = 3.2 + (R.dead < 0 ? 0.05*Math.sin(R.time*9) : 0);
   RC.cx = W/2 + (R.shake ? (Math.random() - .5)*R.shake*30 : 0); RC.camx = R.px*0.55;
+  bakeFacades();   // first: it uses the canvas as scratch, and the sky and ground paint over it
   drawSky(); drawGround();
   const list = [], P = R.pos;
   const push = (z, fn) => { if (z < NEAR - 6 || z > FAR) return; list.push([z, fn]); };
+  // the walls (and the merry-go-round, which stands back behind their line) go first: everything else stands between her and
+  // the walls, so a wall can never be in front of it. Sorted in with the rest by the middle of their 10-unit stretch, a wall
+  // used to paint over a tree, lamp or sign standing in the far half of its stretch, which then popped out in front of it.
+  const back = [], pushBack = (z, fn) => { if (z < NEAR - 6 || z > FAR) return; back.push([z, fn]); };
   const jN = Math.floor((P - PZ - 10)/10), jF = Math.floor((P + FAR)/10);
-  for (let j = Math.max(0, jN); j <= jF; j++) { if (j*10 >= BRIDGE0) break; for (const side of [-1, 1]) push(j*10 - P + PZ + 5, () => drawWall(side, j)); }
+  for (let j = Math.max(0, jN); j <= jF; j++) { if (j*10 >= BRIDGE0) break; for (const side of [-1, 1]) pushBack(j*10 - P + PZ + 5, () => drawWall(side, j)); }
   const pN = Math.floor((P - PZ - 4)/6), pF = Math.floor((P + FAR)/6);
   for (let i = Math.max(0, pN); i <= pF; i++) for (const side of [-1, 1]) {
     const h = hsh(i, side + 7), s = i*6; if (s >= BRIDGE0) continue; const z = s - P + PZ, zk = zoneAt(s);
@@ -642,7 +696,7 @@ function drawWorld(){
     if (kind) push(z, () => drawSideProp({kind, side, col: (h >>> 5) & 1, sc: 0.8 + (h % 5)*0.1}, z));
   }
   for (const s of [14, 22, 30, 38, 46, 54]) for (const side of [-1, 1]) { const z = s - P + PZ; push(z + 4, () => stopCanopy(side, s)); }
-  { const z = 705 - P + PZ; push(z, () => merryGoRound(z)); }
+  { const z = 705 - P + PZ; pushBack(z, () => merryGoRound(z)); }
   { const z = 724 - P + PZ; push(z, () => pyramidFountain(z)); }
   { const z = 1530 - P + PZ; push(z, () => drawJet(z)); }
   if (P + FAR > BRIDGE0) {
@@ -659,7 +713,8 @@ function drawWorld(){
   for (const b of WORLD.baos) if (!b.got) { const z = b.s - P + PZ; if (z > NEAR) push(z, () => drawBao(b, z)); }
   for (const o of WORLD.obs) { const z = o.s - P + PZ; if (z + o.len < NEAR) continue; push(z + (o.len > 2 ? o.len*0.5 : 0), () => drawObs(o, z)); }
   list.push([PZ, drawPlayer]);
-  list.sort((a, b) => b[0] - a[0]);
+  back.sort((a, b) => b[0] - a[0]); list.sort((a, b) => b[0] - a[0]);
+  for (const [z, fn] of back) { ctx.globalAlpha = clamp((FAR - z)/38, 0, 1); fn(); }
   for (const [z, fn] of list) { ctx.globalAlpha = clamp((FAR - z)/38, 0, 1); fn(); }
   ctx.globalAlpha = 1;
 }
