@@ -486,8 +486,10 @@ function exitReplay(){ gameTok++; replay = null; showMenu(); }   // Esc, Skip or
 // a replay starts over from scratch (a fresh game and a fresh timer): the Restart button, or a death in it (the time resets on a
 // full death, after a beat so she sees what happened)
 function restartReplay(){ const id = replay; if (id) menuApi.play(id); }
-function replayDied(tok){ setTimeout(() => { if (tok === gameTok && replay) restartReplay(); }, 1200); }
-const rbtn = (id, label, fn) => { const b = document.createElement('button'); b.id = id; b.textContent = label; b.hidden = true;
+// the restart lands before the game's own retry would (Civic Dash puts her back at its checkpoint 1 s after a crash; the 360 reports a fall 0.3 s in)
+const REPLAY_RESTART = {runner: 700, octagon: 500};
+function replayDied(tok){ setTimeout(() => { if (tok === gameTok && replay) restartReplay(); }, REPLAY_RESTART[replay] || 1200); }
+const rbtn = (id, label, fn) => { const b = document.createElement('button'); b.id = id; b.textContent = label; b.hidden = true; b.tabIndex = -1;
   b.onclick = e => { e.currentTarget.blur(); fn(); }; const ui = document.getElementById('ui'); ui.insertBefore(b, ui.firstChild); return b; };
 const replayBtns = [rbtn('exitBtn', LINES_MAIN.replayExit, () => { if (replay) exitReplay(); }), rbtn('restartBtn', LINES_MAIN.replayRestart, restartReplay)];
 function go(i){
@@ -583,7 +585,7 @@ function frame(now){
   draw(t, dt);
   if (goN === s0) {   // the ride's hearts (and the shutter) sit over whatever game is running
     ctx.setTransform(S, 0, 0, S, 0, 0);
-    if (sub && !replay && !over) drawSub(); else if (hintEl.style.opacity) hintEl.style.opacity = '';
+    if (sub && !replay && !over) drawSub(); else if (hintEl.style.opacity && !menuFading) hintEl.style.opacity = '';
     if (over) drawOver(dt);
     if (goN === s0 && livesOn()) drawHearts(dt);
   }
