@@ -27,6 +27,7 @@ const LINES_CANBERRA = {
   blocks: 'Why are blocks falling from the sky?',  // TODO joke
   clear: 'Clear the road!!',                     // Max (13 Oct): "nailong doesn't break the forth wall in the blockbalst scene, so he just says, 'clear the road!!'"
   happy: 'Happy 18th!',                      // TODO joke
+  happyEmoji: '\u{1F42E}',                   // the cow face emoji after it (Max, 13 Oct: "an apple cow emoji"); Safari on her Mac draws Apple's
   cheer: 'HOORAY!',
   bday: 'Happy Birthday!',                   // Max (13 Oct): the card after the finale, before the replay menu
   bdaySub: 'text me your favorite part :)',  // Max's words
@@ -770,7 +771,16 @@ function sceneParliament(t) {
   }
   confetti(4.9, t, 70, W * 0.1, H * 0.95, 1.4, 1); confetti(4.9, t, 70, W * 0.9, H * 0.95, 1.4, 7); confetti(7.0, t, 60, W * 0.5, H * 0.9, 2.0, 3); confetti(9.2, t, 60, W * 0.3, H * 0.95, 1.8, 5);
   if (t > 5.2) { const k = t - 5.2, pop = k < 0.5 ? easeOut(k / 0.5) * 1.18 : 1.18 - 0.18 * Math.min(1, (k - 0.5) / 0.3);
-    ctx.save(); ctx.translate(W / 2, H * 0.16); ctx.scale(pop, pop); ctx.rotate(Math.sin(t * 3) * 0.03); title(LINES_CANBERRA.happy, 0, 0, Math.min(112, W / 9), '#ffd21f'); ctx.restore(); }
+    ctx.save(); ctx.translate(W / 2, H * 0.16); ctx.scale(pop, pop); ctx.rotate(Math.sin(t * 3) * 0.03);
+    const hs = Math.min(112, W / 9), em = LINES_CANBERRA.happyEmoji, emFont = `${Math.round(hs * 0.9)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+    if (!em) title(LINES_CANBERRA.happy, 0, 0, hs, '#ffd21f');
+    else {   // the emoji is drawn plain beside the title (the title's thick outline would smear a colour emoji)
+      font(hs); const tw = ctx.measureText(LINES_CANBERRA.happy).width;
+      ctx.font = emFont; const ew = ctx.measureText(em).width, gap = hs * 0.2, x0 = -(gap + ew) / 2;
+      title(LINES_CANBERRA.happy, x0, 0, hs, '#ffd21f');
+      ctx.font = emFont; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#000'; ctx.fillText(em, x0 + tw / 2 + gap, hs * 0.04);
+    }
+    ctx.restore(); }
   fadeEdges(t, D);
 }
 // the birthday card (Max, 13 Oct): "Happy Birthday!" and his line under it, then the replay menu. About 9 s at the clip speed.
