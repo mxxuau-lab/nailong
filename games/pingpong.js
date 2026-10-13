@@ -127,8 +127,7 @@ function liuLaoShi(x, y, s, o = {}) {
     ctx.lineCap = 'round'; ctx.strokeStyle = L; ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(0, 24); ctx.stroke();
     ell(0, 44, 24, 26); ctx.lineWidth = 9; ctx.stroke();
     ctx.strokeStyle = '#c9a06a'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(0, 24); ctx.stroke();
-    ell(0, 44, 24, 26); ctx.fillStyle = '#d2382f'; ctx.fill(); ctx.strokeStyle = '#c9a06a'; ctx.lineWidth = 3; ctx.stroke();
-    ell(-7, 36, 6, 4, -0.5); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fill();
+    ell(0, 44, 24, 26); ctx.fillStyle = '#d2382f'; ctx.fill();   // a plain red face in a dark outline: no wooden rim, no shine (Max, 13 Oct: "plain without the weird edges")
     ctx.restore();
   }
   if (marker) {
@@ -679,10 +678,10 @@ function ppNailong() {
   ctx.save(); ctx.translate(bsx, bsy); ctx.rotate(tilt); ctx.scale(1 + sw * 0.18, 1 + sw * 0.18);
   ctx.lineCap = 'round'; ctx.strokeStyle = C.line; ctx.lineWidth = 26; ctx.beginPath(); ctx.moveTo(0, Rpx * 0.8); ctx.lineTo(0, Rpx * 1.55); ctx.stroke();
   ctx.strokeStyle = '#c9a06a'; ctx.lineWidth = 15; ctx.beginPath(); ctx.moveTo(0, Rpx * 0.8); ctx.lineTo(0, Rpx * 1.55); ctx.stroke(); ctx.lineCap = 'butt';
+  // a plain ping pong bat (Max, 13 Oct: "it should be plain without the weird edges"): one flat red face in a dark outline on a
+  // plain wooden handle, no wooden rim and no shine. Same size and place as before (the outline's outer edge is unchanged)
   ell(0, 0, Rpx + 7, Rpx * 1.06 + 7); ctx.fillStyle = C.line; ctx.fill();
-  ell(0, 0, Rpx + 2, Rpx * 1.06 + 2); ctx.fillStyle = '#c9a06a'; ctx.fill();
-  ell(0, 0, Rpx - 6, Rpx * 1.06 - 6); ctx.globalAlpha = 0.9; ctx.fillStyle = '#d6382f'; ctx.fill(); ctx.globalAlpha = 1;
-  ell(-Rpx * 0.3, -Rpx * 0.35, Rpx * 0.3, Rpx * 0.16, -0.6); ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fill();
+  ell(0, 0, Rpx + 2, Rpx * 1.06 + 2); ctx.fillStyle = '#d6382f'; ctx.fill();
   ctx.restore();
   ell(hx, hy, 13, 13); ctx.fillStyle = C.y; ctx.fill(); ctx.strokeStyle = C.line; ctx.lineWidth = 5; ctx.stroke();
   // arrival ring: where her ball will reach your end, so you know where to slide the bat. Faint while the ball is still

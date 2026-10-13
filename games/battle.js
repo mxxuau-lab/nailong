@@ -1,15 +1,15 @@
-// ---------- mini-game: THE TEXTBOOK BOUT (a tiny retro boss battle in the Brindy cafe) ----------
+// ---------- mini-game: THE TEXTBOOK FIGHT (a tiny retro boss battle in the Brindy cafe) ----------
 // Mr Shou throws Cambridge Methods textbooks, one at a time, and every book carries the key that beats it:
 // SPACE swings the bao zi and bats a MIDDLE book back at him (the only way to hurt him; those books wear a red HIT tag), UP jumps a book
 // sliding on the FLOOR, DOWN ducks a book flying HIGH. A card explains it, then three practice throws in Max's order (duck, jump, hit):
 // each slows the world down as it arrives and waits for its key. Every book dealt with in a row adds to a streak that Nailong calls out,
-// and the higher the streak, the faster Mr Shou throws. He has a long health bar; a knockout of Nailong resumes from the last third passed.
+// and the higher the streak, the faster Mr Shou throws. Both health bars are the same size and his drains faster (DMG); a knockout of Nailong resumes from the last third passed.
 // Modelled on Punch-Out style telegraphed attacks: the wind-up pose and the key on the book both say what is coming.
 (() => {
 "use strict";
 
 const LINES_BATTLE = {
-  title: 'THE TEXTBOOK BOUT',
+  title: 'THE TEXTBOOK FIGHT',      // Max, 13 Oct: "the textbook fight not the textbook bout"
   hint: 'laptop: SPACE hit, UP jump, DOWN duck  /  phone: tap right side = hit, left top = jump, left bottom = duck',
   // the instruction card before the fight
   cardTitle: 'KNOCK OUT MR SHOU',                       // placeholder, Max to edit
@@ -83,7 +83,10 @@ const FREEZE = {m: 150, l: 190, h: 130};  // where a practice book stops and wai
 const ZIP = {h: 0.18, l: 0.33, m: 0.14};  // after the right key, the practice book snaps on and meets the move in this many seconds
 const PATTERN = 'mlmhmmhlmlmhmmlh';
 const PAIRS = ['ml', 'mh', 'lm', 'hm'];   // a two-book throw is always one to hit and one to dodge
-const DMG = {hit: 7, perfect: 9, nai: 20};   // about 12 to 14 hits knock him out (a long bar); 5 books knock Nailong out
+// Max, 13 Oct: the bars are the same size now and "the teachers loses health fater": every bat-back takes 11 (a perfect one 13) off
+// Mr Shou, more than the 10 a book takes off Nailong. 8 to 10 hits knock him out (was 12 to 15 at 7 and 9, so the fight is a bit
+// shorter); 10 books knock Nailong out (was 5 at 20 each, so it is no harder to win)
+const DMG = {hit: 11, perfect: 13, nai: 10};
 const CHECK = [66.7, 33.3];               // notches on his bar: a knockout of Nailong resumes from the last one passed
 const LOSE_T = 2.8;                       // seconds on the knockout before the retry (any key after 0.6 s goes sooner); long enough to read the fail line
 
@@ -672,10 +675,12 @@ function drawNailong() {
   else drawBao(x + 60, gy - jo - 42, 30, 0.1);
 }
 
-// health bars: Nailong's short one on the left, Mr Shou's long one (a lot of health) to the right edge, with a notch at each third.
-// They sit below the lives hearts and the Sound button in the top right corner.
+// health bars: Nailong's on the left, Mr Shou's on the right, the SAME size either side of VS (Max, 13 Oct: "make the health bars
+// nailong and the teacher the same size just the teachers loses health fater"), his with a notch at each third. Each of his hits
+// takes a bigger bite of his bar than a book takes of Nailong's (DMG). They sit below the lives hearts and the Sound button.
 function hud() {
-  const y = 62, bh = 28, m = 36, bwN = clamp(W*0.22, 200, 330), vsX = m + bwN + 48, sx0 = vsX + 48, bwS = W - m - sx0;
+  const y = 62, bh = 28, m = 36, gapV = 48, bw = Math.min(560, W/2 - gapV - m), vsX = W/2, bwN = bw, bwS = bw, sx0 = vsX + gapV;
+  // (the left bar ends gapV short of VS, the right one starts gapV past it)
   const bar = (x0, bw, frac, trail, left, col, name, notches) => {
     ctx.save(); ctx.lineJoin = 'round';
     const fw = f => bw*clamp(f/100, 0, 1);
@@ -689,7 +694,7 @@ function hud() {
     font(24, 700); ctx.fillStyle = '#fff'; ctx.strokeStyle = C.line; ctx.lineWidth = 6; ctx.textBaseline = 'top'; ctx.textAlign = left ? 'left' : 'right'; ctx.lineJoin = 'round';
     ctx.strokeText(name, left ? x0 : x0 + bw, y + bh + 10); ctx.fillText(name, left ? x0 : x0 + bw, y + bh + 10);
   };
-  bar(m, bwN, B.hp, B.hpTrail, true, '#ffd21f', LINES_BATTLE.nameL, []);
+  bar(vsX - gapV - bwN, bwN, B.hp, B.hpTrail, true, '#ffd21f', LINES_BATTLE.nameL, []);
   bar(sx0, bwS, B.shHp, B.shTrail, false, '#7ee05a', LINES_BATTLE.nameR, CHECK);
   title(LINES_BATTLE.vs, vsX, y + bh/2 + 2, 40, '#fff');
   if (B.streak >= STREAK.say && B.phase === 'play') title(LINES_BATTLE.streakX + B.streak, vsX, y + 76, 34, '#ffd21f');   // the streak as a number (Nailong says it too)

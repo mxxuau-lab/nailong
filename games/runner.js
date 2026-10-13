@@ -3,10 +3,13 @@
 // and Melbourne Buildings on Northbourne Avenue, City Walk and Garema Place, the Canberra Centre and the merry-go-round on
 // Petrie Plaza, London Circuit (light rail works), Commonwealth Avenue with Parliament House's flag ahead, then the
 // Commonwealth Avenue Bridge over the lake with the Captain Cook Jet. research/runner.md lists the photos behind each piece.
-// Score = coins (higher is better). The more coins she holds, the more coin lines turn into bao zi (a speed burst, worth
-// 2 coins each), and bao zi eaten back to back stack the speed: a greedy run ends almost all bao zi and very fast, while
-// the last stretch spaces the obstacles out so it stays dodgeable. A crash: api.died() once, then the instant restart at the
-// last checkpoint (coins kept). Test hooks: ?coins=N starts with N coins (to see the rush); ?level is ignored (one level).
+// Score = TIME (lower is better; Max, 13 Oct: "the score for everything should be in time, including this one"): the clock
+// runs from the card to the finish, through crashes. No power-ups: nothing changes her speed but the run's own steady pace.
+// Coins fill the bar in the top HUD; a full bar drops a bao zi out of the vending machine at its end, onto the track ahead of
+// her, and eating it takes 1 s off her time. Coins thicken as the run goes on. Short stretches between checkpoints (about
+// 9 s each) and a row every second or so, every row making her switch lanes, jump or roll; each row is at least ~1.05 s
+// after the last so a casual player can always land and act again. A crash: api.died() once, then the instant restart at the
+// last checkpoint (coins and time kept). Test hooks: ?coins=N starts the bar at N coins; ?level is ignored (one level).
 (() => {
 "use strict";
 
@@ -16,13 +19,14 @@ const LINES_RUNNER = {
   cardJump: 'jump',                              // placeholder, Max to edit
   cardRoll: 'roll',                              // placeholder, Max to edit
   cardSpace: 'space',                            // placeholder, Max to edit (the space bar keycap)
-  cardRule: 'coins = more bao zi = faster',      // placeholder, Max to edit
-  cardRoute: 'Alinga St to the big bridge',      // placeholder, Max to edit
+  cardRule: 'coins = bao zi = -1 second',        // placeholder, Max to edit
+  cardRoute: 'Alinga St to the big bridge. Fastest time wins.',   // placeholder, Max to edit
   cardGo: 'press any key',                       // placeholder, Max to edit
-  boost: ['BAO ZI!', 'ZOOM!', 'MORE BAO!', 'NOM NOM!', 'FASTER!'],
-  plus: '+2',                                    // placeholder, Max to edit (a bao zi is worth 2 coins)
+  minus: '-1.0s',                                // a bao zi eaten: one second off her time
+  vend: 'BAO ZI',                                // the label on the vending machine in the top bar
   checkpoint: ['CHECKPOINT', 'CHECKPOINT. snacks too.'],
-  gates: ['CITY WALK', 'CANBERRA CENTRE', 'LONDON CIRCUIT', 'COMMONWEALTH AVE', 'COMMONWEALTH BRIDGE'],   // placeholder, Max to edit (first four)
+  // the arch over each checkpoint, in order (placeholder, Max to edit)
+  gates: ['CHECKPOINT', 'CITY WALK', 'GAREMA PLACE', 'CANBERRA CENTRE', 'CHECKPOINT', 'LONDON CIRCUIT', 'CHECKPOINT', 'COMMONWEALTH AVE', 'CHECKPOINT', 'COMMONWEALTH BRIDGE', 'CHECKPOINT'],
   finish: 'FINISH',                              // placeholder, Max to edit
   stopSign: 'ALINGA ST',
   zone: {north: 'Northbourne Avenue', walk: 'City Walk', centre: 'Canberra Centre', london: 'London Circuit', avenue: 'Commonwealth Avenue', bridge: 'Commonwealth Avenue Bridge'},   // placeholder, Max to edit
@@ -31,7 +35,6 @@ const LINES_RUNNER = {
   jet: 'CAPTAIN COOK JET',
   win: 'The big bridge!',
   win2: 'Nailong is very out of breath.',
-  score: 'coins',                                // placeholder, Max to edit (replay finish: "123 coins")
   go: 'Go.',
   fail: {
     tram:    ['That was the light rail. It does not stop for dumplings.', 'The tram has right of way. Always.', 'Ding ding. Too late.'],
@@ -61,15 +64,17 @@ const ZONES = [
   {k: 'bridge', s1: 1e9},    // Commonwealth Avenue Bridge over Lake Burley Griffin, the Captain Cook Jet on the left
 ];
 const zoneAt = s => { for (const z of ZONES) if (s < z.s1) return z.k; return 'bridge'; };
-const D = 1660, CPS = [0, 300, 640, 920, 1180, 1400], BRIDGE0 = 1400, RUSH0 = 1180;
+// a checkpoint every 110 to 180 units (about 9 s at the pace there): short stretches, so a crash never costs much
+const D = 1600, CPS = [0, 140, 300, 460, 640, 790, 920, 1050, 1180, 1290, 1400, 1500], BRIDGE0 = 1400;
 
 // ---- world constants ----
 const LANE = 1.55, NEAR = 0.5, PZ = 3.2, FAR = 105;
-const PH = 1.1, PH_ROLL = 0.55, JUMP_V = 10.0, GRAV = 27.8, ROLL_T = 0.55, BOOST_T = 2.2;
+const PH = 1.1, PH_ROLL = 0.55, JUMP_V = 10.0, GRAV = 27.8, ROLL_T = 0.55;
 const WALL_X = 4.3, ROAD_X = 2.6;
-const BASE = 11.5, GAIN = 5.0;                // base speed 11.5 -> 16.5 units/s over the run
-const BAO_V = 0.45, HEAT_V = 0.075, HEAT_MAX = 6;   // a bao zi: +45% speed for 2.2 s; each one eaten while boosted stacks +7.5%
-const CARD_MAX = 6, DEAD_T = 1.0, INV_T = 1.6;
+const BASE = 12.5, GAIN = 6.0;                // her pace: 12.5 -> 18.5 units/s over the run, and nothing else changes it
+const vAt = s => BASE + GAIN*clamp(s/D, 0, 1);
+const BAR_N = 20, BAO_SEC = 1.0, DROP_T = 0.8; // 20 coins fill the bar; a bao zi takes 1 s off; it falls for 0.8 s
+const CARD_MAX = 6, DEAD_T = 1.0, INV_T = 1.0;   // after a restart she blinks for 1 s; the first row is 18 units past the arch, so she meets it for real
 const R = {};
 const RC = {hy: 200, f: 370, camH: 3.2, cx: 640, camx: 0};
 let WORLD = null, swipe = null, doneCalled = false, hookUsed = false, startCoins = 0;
@@ -78,12 +83,17 @@ function rng(seed){ let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 
 function hsh(a, b){ let h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263)) >>> 0; h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0; return (h ^ (h >>> 16)) >>> 0; }
 
 // ---- build the track once (same every run, so a restart is fair) ----
+// Rows of obstacles about a second apart, almost every one making her act (Max, 13 Oct: "there's not enough obstacles in
+// the game ... she'd get bored af"). Fairness: rows are spaced in TIME at the pace there. A jump is 0.72 s in the air, so
+// the next row is at least 1.05 s after the last (even a late jump lands with 0.35 s to spare); after a row that only
+// needs a lane change, 0.8 s. Every row leaves at least one way through.
 function build(){
   const rnd = rng(1813);
-  const obs = [], coins = [], baos = [], birds = [], gaps = [], lines = [];
+  const obs = [], coins = [], baos = [], birds = [], rows = [];
   const JUMPS = ['low', 'bin', 'scooter'];
   const pick = a => a[Math.floor(rnd()*a.length)];
   const lanes = [-1, 0, 1];
+  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd()*(i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const mk = (k, lane, s, len) => {
     const o = {k, lane, s, len: len || 0.5, x: lane*LANE, hw: 0.7, y0: 0, y1: 0.7};
     if (k === 'low') { o.len = 0.45; o.y1 = 0.7; }
@@ -97,91 +107,102 @@ function build(){
   };
   const blockerOf = s => { const z = zoneAt(s); return z === 'north' ? 'tram' : (z === 'walk' || z === 'centre') ? 'planter' : 'car'; };
   const blockLen = k => k === 'tram' ? 8 + Math.floor(rnd()*5) : k === 'planter' ? 6 + Math.floor(rnd()*3) : 4.2;
-  const gapLine = (a, b, lane) => { const ln = {lane, a, b, coins: [], dec: false}; for (let c = a; c <= b; c += 1.6) { const co = {lane, s: c, y: 0.6, got: false}; coins.push(co); ln.coins.push(co); } if (ln.coins.length) lines.push(ln); };
-  let s = 42, row = 0;
-  while (s < D - 40) {
-    for (const cp of CPS) if (s > cp - 6 && s < cp + 20) s = cp + 20;
-    if (s >= D - 40) break;
-    const prog = s / D, rush = s >= RUSH0;
-    const free = pick(lanes), others = lanes.filter(l => l !== free);
-    const roll = rnd(), bk = blockerOf(s);
-    let len = 1;
-    if (row % 5 === 4) {   // a breather: only coins
-      const L = rush ? 26 : 18;
-      gaps.push([s, s + L]); gapLine(s + 2, s + L - 3, pick(lanes));
-      s += L + 2; row++; continue;
+  // a lane shut for at least n units: one tram, planters end to end, or a queue of stopped cars
+  const shut = (lane, s, n) => { const k = blockerOf(s); let e = s; do { const L = blockLen(k); mk(k, lane, e, L); e += L + (k === 'car' ? 0.8 : 0.3); } while (e - s < n); return e - s; };
+  const one = (lane, s) => mk(pick(JUMPS), lane, s);
+  let s = 40, n = 0;
+  while (s < D - 30) {
+    for (const cp of CPS) if (s > cp - 4 && s < cp + 18) s = cp + 18;   // a breath at each checkpoint (and room to restart)
+    if (s >= D - 30) break;
+    const prog = s/D, v = vAt(s), L3 = shuffle(lanes), room = (CPS.find(c => c > s) || D) - s;
+    let r = rnd();
+    // close to a checkpoint (or the finish) only short rows, so nothing long runs over the arch where she restarts
+    if (room < 34) r = [0.05, 0.35, 0.45][Math.floor(rnd()*3)];
+    const row = {s, e: s + 1, free: [], jl: [], soft: false, n: n++};
+    if (s < 130) {   // the first stretch teaches: one thing at a time, then two
+      if (r < 0.3) { const k = rnd() < 0.3 ? 'high' : pick(JUMPS); mk(k, L3[0], s); row.free = [L3[1], L3[2]]; if (k !== 'high') row.jl = [L3[0]]; }
+      else if (r < 0.75) { one(L3[0], s); one(L3[1], s); row.free = [L3[2]]; row.jl = [L3[0], L3[1]]; }
+      else { for (const l of lanes) mk('low', l, s); row.jl = [L3[0]]; }
+    } else if (r < 0.15) {   // two in the way, one lane open (or jump/roll them)
+      one(L3[0], s); if (rnd() < 0.5) one(L3[1], s); else mk('high', L3[1], s); row.free = [L3[2]]; row.jl = [L3[0]];
+    } else if (r < 0.30) {   // all three different: jump one, roll one, go round the big one
+      one(L3[0], s); mk('high', L3[1], s); row.e = s + shut(L3[2], s, 1); row.jl = [L3[0]];
+    } else if (r < 0.42) {   // a wall to jump: barriers, bins and scooters across the road
+      for (const l of lanes) mk(rnd() < 0.6 ? 'low' : pick(JUMPS), l, s); row.jl = [L3[0]];
+    } else if (r < 0.50) {   // MIND YOUR HEAD across the road: roll
+      for (const l of lanes) mk('high', l, s);
+    } else if (r < 0.62) {   // two lanes shut, one open, and something in the open lane a beat later
+      const len = Math.max(0.9*v + 3, 9); row.e = s + Math.max(shut(L3[0], s, len), shut(L3[1], s, len));
+      const k = rnd() < 0.7 ? pick(JUMPS) : 'high'; mk(k, L3[2], s + 0.85*v); row.free = [L3[2]]; row.lane = L3[2]; row.mid = s + 0.85*v;
+      row.corr = k !== 'high';
+    } else if (r < 0.74) {   // jump then roll (or roll then jump), 1.1 s apart
+      const a = rnd() < 0.6 ? 'J' : 'R', s2 = s + 1.1*v;
+      for (const l of lanes) { if (a === 'J') { mk('low', l, s); mk('high', l, s2); } else { mk('high', l, s); mk('low', l, s2); } }
+      row.e = s2 + 0.6; row.jl = [L3[0]]; row.jAt = a === 'J' ? s : s2;
+    } else if (r < 0.88) {   // zigzag: two lanes shut, then the other two shut, so she weaves across
+      const a = L3[2], b = pick(lanes.filter(l => l !== a)), sh1 = lanes.filter(l => l !== a), e1 = s + Math.max(shut(sh1[0], s, 6), shut(sh1[1], s, 6));
+      const s2 = e1 + 0.8*v, sh2 = lanes.filter(l => l !== b);
+      row.e = s2 + Math.max(shut(sh2[0], s2, 6), shut(sh2[1], s2, 6)); row.free = [a]; row.soft = true; row.zig = [a, b, e1, s2];
+    } else {   // two lanes shut, one open (a quick swerve)
+      row.e = s + Math.max(shut(L3[0], s, 1), shut(L3[1], s, 1)); row.free = [L3[2]]; row.soft = true;
     }
-    if (s < 90) {
-      const k = roll < 0.25 ? 'high' : pick(JUMPS); mk(k, pick(lanes), s);
-    } else if (rush) {   // the rush: simple rows only, far apart, so the top speed stays fair
-      if (roll < 0.36) { mk('car', pick(lanes), s); len = 4.2; }
-      else if (roll < 0.62) { const k = pick(JUMPS); mk(k, others[0], s); mk(k, others[1], s); }
-      else if (roll < 0.78) mk('low', 0, s), mk('low', -1, s), mk('low', 1, s);
-      else if (roll < 0.86) mk('high', pick(lanes), s);
-      else mk(pick(JUMPS), pick(lanes), s);
-    } else if (roll < 0.28) {
-      const k = pick(JUMPS); mk(k, others[0], s); mk(k, others[1], s);
-    } else if (roll < 0.50) {
-      const tl = blockLen(bk), tlane = pick(lanes); mk(bk, tlane, s, tl); len = tl;
-      if (prog > 0.2 && rnd() < 0.5) mk(pick(JUMPS), pick(lanes.filter(l => l !== tlane)), s + 1 + rnd()*3);
-    } else if (roll < 0.62 && prog > 0.12) {
-      const a = blockLen(bk), b = blockLen(bk); mk(bk, others[0], s, a); mk(bk, others[1], s + 5, b); len = Math.max(a, b + 5);
-    } else if (roll < 0.74 && prog > 0.1) {
-      const k = rnd() < 0.5 ? 'low' : 'high'; for (const l of lanes) mk(k, l, s);
-    } else if (roll < 0.86) {
-      mk('high', pick(lanes), s);
-    } else {
-      mk(pick(JUMPS), pick(lanes), s);
-    }
-    const g = rush ? 29 + rnd()*7 : 15 - prog*2.5 + rnd()*5;
-    gaps.push([s + len + 2, s + len + g - 2]);
-    if (rnd() < (rush ? 0.95 : 0.75)) gapLine(s + len + 3, s + len + g - 3, pick(lanes));
-    const last = obs[obs.length - 1];
-    if (last && JUMPS.includes(last.k) && rnd() < 0.5 && !obs.some(o => o !== last && o.s === last.s)) {
-      for (let i = 0; i < 5; i++) coins.push({lane: last.lane, s: last.s - 3 + i*1.6, y: 0.6 + Math.sin(i/4*Math.PI)*1.1, got: false});
-    }
-    s += len + g; row++;
+    for (const o of obs) if (o.s >= s) row.e = Math.max(row.e, o.s + o.len);
+    rows.push(row);
+    const T = row.soft ? 0.72 : (s < 130 ? 1.35 : 1.05 + 0.1*(1 - prog)) + rnd()*0.1;
+    s = row.e + T*vAt(row.e);
   }
-  // three fixed bao zi teach the idea (the first in the middle lane, early); the rest grow out of the coins (see convert)
-  for (const m of [26, 160, 470]) {
-    let best = null;
-    for (const g of gaps) { if (g[1] - g[0] < 5) continue; const d = Math.abs((g[0] + g[1])/2 - m); if (!best || d < best.d) best = {d, g}; }
-    baos.push({lane: m < 40 ? 0 : pick(lanes), s: m < 40 ? 26 : best ? (best.g[0] + best.g[1])/2 : m, got: false});
-  }
-  // the coin lines a bao zi would sit on top of are taken out
-  for (const ln of lines) ln.coins = ln.coins.filter(c => !baos.some(b => b.lane === c.lane && Math.abs(b.s - c.s) < 1.2));
+  // coins: thin at Alinga St, a stream by the bridge (Max: "the amount of coins on the track increases as the track goes on")
+  const line = (lane, a, b, sp) => { for (let c = a; c <= b; c += sp) coins.push({lane, s: c, y: 0.6, got: false}); };
+  const arc = (lane, at) => { for (let i = 0; i < 5; i++) coins.push({lane, s: at - 3 + i*1.6, y: 0.6 + Math.sin(i/4*Math.PI)*1.1, got: false}); };
+  rows.forEach((row, i) => {
+    const prog = row.s/D, sp = 2.1 - 0.7*prog, nx = rows[i + 1], a = row.e + 1.5, b = (nx ? nx.s : D) - 1.5;
+    if (b - a > 3 && rnd() < 0.5 + 0.5*prog) {
+      const l1 = nx && nx.free.length ? pick(nx.free) : pick(lanes); line(l1, a, b, sp);
+      if (rnd() < (prog - 0.3)*1.4) line(pick(lanes.filter(l => l !== l1)), a + sp/2, b, sp);
+    }
+    if (row.corr) { line(row.lane, row.s, row.mid - 3.5, sp); arc(row.lane, row.mid); line(row.lane, row.mid + 3.8, row.e - 0.5, sp); }
+    else if (row.zig) { const [za, zb, e1, s2] = row.zig; line(za, row.s, e1 - 0.5, sp); line(zb, s2, row.e - 0.5, sp); }
+    else for (const l of row.jl) if (rnd() < 0.25 + 0.6*prog) arc(l, row.jAt || row.s);
+  });
   // pigeons on Northbourne, City Walk and Petrie Plaza
   for (let i = 0; i < 30; i++) birds.push({s: 36 + i*29 + rnd()*10, x: (rnd()*2 - 1)*2.2, n: 3 + Math.floor(rnd()*3), seed: rnd()*100, fly: 0});
-  obs.sort((a, b) => a.s - b.s); lines.sort((a, b) => a.a - b.a);
-  return {obs, coins, baos, birds, lines};
+  obs.sort((a, b) => a.s - b.s); coins.sort((a, b) => a.s - b.s);
+  return {obs, coins, baos, birds, rows};
 }
 
-// how likely a coin line still out of sight becomes bao zi: grows with her coins, and much more in the rush
-function baoP(s){
-  const c = R.coins;
-  return s >= RUSH0 ? clamp(0.2 + c/170, 0, 0.94) : clamp((c - 12)/230, 0, 0.55);
-}
-function convert(ln){
-  ln.bao = true;
-  ln.coins.forEach((c, i) => { c.hide = true; if (i % 2 === 0) WORLD.baos.push({lane: c.lane, s: c.s, got: false, dyn: true}); });
+// a full coin bar: a bao zi pops out of the vending machine and falls onto the track ahead of her, in her lane if it is
+// clear there, else a clear one beside it. It lands about 1.5 s ahead of her, so there is time to go and get it.
+function dropBao(){
+  if (R.finish >= 0) return;
+  const v = R.speed, others = [-1, 0, 1].filter(l => l !== R.lane).sort(() => Math.random() - 0.5);
+  for (let k = 0; k < 14; k++) {
+    const s = R.pos + v*(DROP_T + 1.3) + 4 + k*3; if (s > D - 8) return;
+    for (const l of [R.lane, ...others]) {
+      if (WORLD.obs.some(o => o.lane === l && o.s < s + 4 && o.s + o.len > s - 5)) continue;
+      for (const c of WORLD.coins) if (c.lane === l && Math.abs(c.s - s) < 1.3) c.hide = true;
+      WORLD.baos.push({lane: l, s, got: false, t: 0});
+      R.vend = 0.45; sfx('clink', {p: 1.4, g: 0.5}); sfx('pop', {p: 0.8});
+      console.log('RUNNER bao drops at s=' + s.toFixed(1) + ' lane ' + l + ' (she is at ' + R.pos.toFixed(1) + ')');
+      return;
+    }
+  }
 }
 
 // ---- state ----
-// fromCp: restart at the last checkpoint (coins and decided bao zi kept)
+// fromCp: restart at the last checkpoint (coins, the bar, her time and any bao zi on the track kept)
 function reset(fromCp){
-  const keep = fromCp ? {crashes: R.crashes, coins: R.coins, time: R.time, cp: R.cp, nbao: R.nbao, lastMsg: R.lastMsg, msg: R.msg, msgT: R.msgT, card: 0}
-    : {crashes: 0, coins: startCoins, time: 0, cp: 0, nbao: 0, lastMsg: '', msg: '', msgT: 0, card: (GAMES.runner.api && GAMES.runner.api.replay) ? 0 : CARD_MAX};
+  const keep = fromCp ? {crashes: R.crashes, coins: R.coins, bar: R.bar, clk: R.clk, time: R.time, cp: R.cp, nbao: R.nbao, lastMsg: R.lastMsg, msg: R.msg, msgT: R.msgT, card: 0}
+    : {crashes: 0, coins: startCoins, bar: Math.min(startCoins, BAR_N - 1), clk: 0, time: 0, cp: 0, nbao: 0, lastMsg: '', msg: '', msgT: 0, card: (GAMES.runner.api && GAMES.runner.api.replay) ? 0 : CARD_MAX};
   for (const k of Object.keys(R)) delete R[k];
   Object.assign(R, {
-    pos: CPS[keep.cp], speed: BASE, boostT: 0, boostV: 0, heat: 0, lane: 0, px: 0, py: 0, vy: 0, rollT: 0, inv: fromCp ? INV_T : 0,
+    pos: CPS[keep.cp], speed: BASE, boostV: 0, heat: 0, lane: 0, px: 0, py: 0, vy: 0, rollT: 0, inv: fromCp ? INV_T : 0,
     dead: -1, finish: -1, banner: null, pops: [], landT: 0, landPuffs: [], hit: 0, coinBump: 0, sparks: [], chain: 0, coinAt: -9, again: !!fromCp,
-    shake: 0, mouth: 0, flash: 0, deadDir: 1, cardT: 0, heard: new Set(),
+    shake: 0, mouth: 0, flash: 0, deadDir: 1, cardT: 0, heard: new Set(), vend: 0, clkFx: 0,
   }, keep);
   if (WORLD) {
     if (!fromCp) {
       for (const c of WORLD.coins) { c.got = false; c.hide = false; }
-      WORLD.baos = WORLD.baos.filter(b => !b.dyn); for (const b of WORLD.baos) b.got = false;
-      for (const ln of WORLD.lines) { ln.dec = false; ln.bao = false; }
+      WORLD.baos = [];
     }
     for (const b of WORLD.birds) if (b.s > R.pos + 5) b.fly = 0;
   }
@@ -352,6 +373,10 @@ function drawCoin(c, z){
 }
 function drawBao(b, z){
   const bob = Math.sin(R.time*5 + b.s)*0.08, [x, y] = PJ(b.lane*LANE, 0.75 + bob, z), r = 0.42*RC.f/z;
+  baoAt(x, y, r);
+}
+// a steamed bun at screen x, y, radius r (the track's bao zi, the one falling from the machine, the ones in its window)
+function baoAt(x, y, r, noSteam){
   ctx.save(); ctx.translate(x, y);
   ctx.fillStyle = 'rgba(0,0,0,.18)'; ell(0, r*1.05, r*0.9, r*0.2); ctx.fill();
   ctx.lineWidth = Math.max(1.5, r*0.1); ctx.strokeStyle = C.line; ctx.lineJoin = 'round';
@@ -360,6 +385,7 @@ function drawBao(b, z){
   for (let i = 0; i < 7; i++) { const a = (i-3)*0.33; ctx.moveTo(Math.sin(a)*r*0.12, -r*0.62); ctx.quadraticCurveTo(Math.sin(a)*r*0.6, -r*0.45, Math.sin(a)*r*0.82, -r*0.1); }
   ctx.stroke();
   ell(0, -r*0.62, r*0.1, r*0.07); ctx.fillStyle = '#ffe3b8'; ctx.fill();
+  if (noSteam) { ctx.restore(); return; }
   ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = Math.max(1.5, r*0.09); ctx.lineCap = 'round';
   for (const dx of [-0.35, 0.3]) { ctx.beginPath(); ctx.moveTo(dx*r, -r*1.0); ctx.quadraticCurveTo(dx*r + r*0.2*Math.sin(R.time*4 + dx*9), -r*1.3, dx*r, -r*1.6); ctx.stroke(); }
   ctx.restore();
@@ -572,7 +598,7 @@ function merryGoRound(z){
   ctx.strokeStyle = C.line; ctx.lineWidth = 0.07;
   for (const fx of [-1.7, 1.7]) { ctx.beginPath(); ctx.moveTo(fx, -3.6); ctx.lineTo(fx, -5.3); ctx.stroke(); ctx.save(); ctx.translate(fx, -5.3); ctx.scale(1 + Math.sin(R.time*5 + fx)*0.12, 1); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0.75, 0.2); ctx.lineTo(0, 0.45); ctx.closePath(); ctx.fillStyle = '#ffb347'; ctx.fill(); ctx.stroke(); ctx.restore(); }
   ctx.restore();
-  const px = Math.min(k*0.9, 46); if (px >= 9) { const [sx, sy] = PJ(-8.2, 9.0, z); font(px); const hw = ctx.measureText(LINES_RUNNER.merry).width/2 + px*0.2; title(LINES_RUNNER.merry, clamp(sx, 10 + hw, W - 10 - hw), Math.max(sy, 82), px, '#fff7d6'); }
+  const px = Math.min(k*0.9, 46); if (px >= 9) { const [sx, sy] = PJ(-8.2, 9.0, z); font(px); const hw = ctx.measureText(LINES_RUNNER.merry).width/2 + px*0.2; title(LINES_RUNNER.merry, clamp(sx, 10 + hw, W - 10 - hw), Math.max(sy, 146), px, '#fff7d6'); }
 }
 // the glass pyramid fountain in front of the Canberra Centre
 function pyramidFountain(z){
@@ -596,7 +622,7 @@ function drawJet(z){
     ell(sw, -0.6 - i*1.35, r, 0.95); ctx.fillStyle = i % 2 ? '#ffffff' : '#dff3ff'; ctx.fill(); ctx.stroke();
   }
   ctx.restore();
-  const px = Math.min(k*1.3, 52); if (px >= 9) { const [sx, sy] = PJ(-26, 24, z); font(px); const hw = ctx.measureText(LINES_RUNNER.jet).width/2 + px*0.2; title(LINES_RUNNER.jet, clamp(sx, 10 + hw, W - 10 - hw), Math.max(sy, 82), px, '#fff7d6'); }
+  const px = Math.min(k*1.3, 52); if (px >= 9) { const [sx, sy] = PJ(-26, 24, z); font(px); const hw = ctx.measureText(LINES_RUNNER.jet).width/2 + px*0.2; title(LINES_RUNNER.jet, clamp(sx, 10 + hw, W - 10 - hw), Math.max(sy, 146), px, '#fff7d6'); }
 }
 // the arch for checkpoints and the finish
 function drawArch(s, text, col){
@@ -710,7 +736,7 @@ function drawWorld(){
   push(D - P + PZ, () => drawArch(D, LINES_RUNNER.finish, '#e0372f'));
   for (const g of WORLD.birds) { const z = g.s - P + PZ; push(z, () => drawBirds(g, z)); }
   for (const c of WORLD.coins) if (!c.got && !c.hide) { const z = c.s - P + PZ; if (z > NEAR) push(z, () => drawCoin(c, z)); }
-  for (const b of WORLD.baos) if (!b.got) { const z = b.s - P + PZ; if (z > NEAR) push(z, () => drawBao(b, z)); }
+  for (const b of WORLD.baos) if (!b.got && b.t >= DROP_T) { const z = b.s - P + PZ; if (z > NEAR) push(z, () => drawBao(b, z)); }
   for (const o of WORLD.obs) { const z = o.s - P + PZ; if (z + o.len < NEAR) continue; push(z + (o.len > 2 ? o.len*0.5 : 0), () => drawObs(o, z)); }
   list.push([PZ, drawPlayer]);
   back.sort((a, b) => b[0] - a[0]); list.sort((a, b) => b[0] - a[0]);
@@ -777,6 +803,10 @@ function crash(o){
 function step(dt){
   R.time += dt;
   if (R.card > 0) { R.cardT += dt; R.card -= window.AUTO ? dt*5 : dt; return; }   // the instruction card: the world waits (any key starts)
+  // her time: from the card to the finish line, through every crash and restart (a crash costs its tumble and the replayed stretch)
+  if (R.finish < 0) R.clk += dt;
+  R.clkFx = Math.max(0, R.clkFx - dt); R.vend = Math.max(0, R.vend - dt);
+  for (const b of WORLD.baos) if (b.t < DROP_T) { b.t += dt; if (b.t >= DROP_T) sfx('thud', {p: 2.2, g: 0.3}); }   // a bao zi still falling from the machine
   R.shake = Math.max(0, R.shake - dt); R.flash = Math.max(0, R.flash - dt); R.mouth = Math.max(0, R.mouth - dt); R.msgT = Math.max(0, R.msgT - dt);
   if (R.banner) { R.banner.t += dt; if (R.banner.t > 2.0) R.banner = null; }
   for (const p of R.pops) p.t += dt; R.pops = R.pops.filter(p => p.t < 1.0);
@@ -785,11 +815,7 @@ function step(dt){
   if (R.hit > 0) { R.hit -= dt; return; }   // hit-stop: Nailong holds the impact pose for 80 ms under the flash, then tumbles
   if (R.dead >= 0) { R.dead += dt; if (R.dead > DEAD_T) reset(true); return; }
   if (window.AUTO) bot();
-  R.boostT = Math.max(0, R.boostT - dt);
-  if (R.boostT <= 0) R.heat = Math.max(0, R.heat - dt*1.5);
-  R.boostV += ((R.boostT > 0 ? 1 : 0) - R.boostV)*Math.min(1, dt*(R.boostT > 0 ? 9 : 2.5));
-  const base = BASE + GAIN*clamp(R.pos/D, 0, 1);
-  R.speed = base*(1 + BAO_V*R.boostV + HEAT_V*R.heat*R.boostV);
+  R.speed = vAt(R.pos);   // no power-ups: her pace is the run's own and nothing else (Max, 13 Oct: "there's no power ups")
   if (R.finish >= 0) { R.finish += dt; R.speed *= clamp(1 - R.finish*0.6, 0.15, 1); }
   R.pos += R.speed*dt;
   R.px += (R.lane*LANE - R.px)*Math.min(1, dt*15);
@@ -799,19 +825,18 @@ function step(dt){
   if (R.rollT > 0) R.rollT = Math.max(0, R.rollT - dt);
   if (R.inv > 0) R.inv -= dt;
   for (let i = R.cp + 1; i < CPS.length; i++) if (R.pos >= CPS[i]) { R.cp = i; R.banner = {text: LINES_RUNNER.checkpoint[(i - 1) % LINES_RUNNER.checkpoint.length], t: 0}; sfx('ding'); console.log('RUNNER checkpoint ' + i + ' t=' + R.time.toFixed(1) + ' coins=' + R.coins); }
-  // coin lines still out of sight become bao zi, more of them the more coins she has
-  for (const ln of WORLD.lines) { if (ln.dec) continue; if (ln.a - R.pos > FAR + 4) break; ln.dec = true; if (ln.a - R.pos > 10 && ln.coins.length && Math.random() < baoP(ln.a)) convert(ln); }
   for (const c of WORLD.coins) if (!c.got && !c.hide && Math.abs(c.s - R.pos) < 0.7 && Math.abs(c.lane*LANE - R.px) < 0.75 && Math.abs(c.y - (R.py + (R.rollT > 0 ? 0.3 : 0.55))) < 0.95) {
     c.got = true; R.coins++; R.coinBump = 0.18;   // the counter jumps and the coin glints
     if (R.time - R.coinAt > 0.8) R.chain = 0; R.chain++; R.coinAt = R.time;   // a coin run pings a little higher each coin
     sfx('coin', {p: 1 + 0.06*Math.min(R.chain, 8)});
     R.sparks.push({lane: c.lane, y: c.y, t: 0, side: R.coins % 2 ? 1 : -1}); if (R.sparks.length > 3) R.sparks.shift();
+    if (++R.bar >= BAR_N) { R.bar = 0; dropBao(); }   // a full bar: the machine drops a bao zi
   }
-  for (const b of WORLD.baos) if (!b.got && Math.abs(b.s - R.pos) < 1.0 && Math.abs(b.lane*LANE - R.px) < 0.85) {
-    b.got = true; if (R.boostT > 0) R.heat = Math.min(HEAT_MAX, R.heat + 1); R.boostT = BOOST_T; R.mouth = 0.5; R.nbao++; R.coins += 2; R.coinBump = 0.18;
-    sfx('chomp', {g: 0.7}); sfx('whoosh', {p: 1 + 0.08*R.heat});
-    popup(R.heat >= 2 ? LINES_RUNNER.plus : LINES_RUNNER.boost[R.nbao % LINES_RUNNER.boost.length], b.lane*LANE, 1.8, R.heat < 2);
-    console.log('RUNNER bao #' + R.nbao + ' at s=' + R.pos.toFixed(1) + ' heat=' + R.heat + ' speed=' + R.speed.toFixed(1));
+  for (const b of WORLD.baos) if (!b.got && b.t >= DROP_T && Math.abs(b.s - R.pos) < 1.0 && Math.abs(b.lane*LANE - R.px) < 0.85) {
+    b.got = true; R.mouth = 0.5; R.nbao++; R.clk = Math.max(0, R.clk - BAO_SEC); R.clkFx = 0.9;   // a bao zi: one second off her time, never any speed
+    sfx('chomp', {g: 0.7}); sfx('ding', {p: 1.5, g: 0.4});
+    popup(LINES_RUNNER.minus, b.lane*LANE, 1.8, true);
+    console.log('RUNNER bao #' + R.nbao + ' at s=' + R.pos.toFixed(1) + ' clock=' + R.clk.toFixed(1));
   }
   for (const g of WORLD.birds) { if ((g.fly || 0) > 0) g.fly += dt; else if (g.s - R.pos < 16 && g.s - R.pos > -4) { g.fly = 0.001; sfx('squeak', {g: 0.35}); } }
   // the light rail rings and the traffic honks as she comes up behind them (once each)
@@ -825,9 +850,9 @@ function step(dt){
     }
   }
   if (R.pos >= D && R.finish < 0) { R.finish = 0; sfx('firework');
-    console.log('RUNNER finished: time=' + R.time.toFixed(1) + 's crashes=' + R.crashes + ' coins=' + R.coins + ' bao=' + R.nbao); }
+    console.log('RUNNER finished: clock=' + R.clk.toFixed(1) + 's time=' + R.time.toFixed(1) + 's crashes=' + R.crashes + ' coins=' + R.coins + ' bao=' + R.nbao); }
   const hold = GAMES.runner.api && GAMES.runner.api.replay ? 2.0 : 3.4;   // a beat on the finish line so the words read
-  if (R.finish > hold && !doneCalled) { doneCalled = true; console.log('RUNNER done, ' + R.coins + ' coins'); GAMES.runner.api.done(R.coins); }   // the menu scores the runner in coins
+  if (R.finish > hold && !doneCalled) { doneCalled = true; const secs = Math.round(R.clk*10)/10; console.log('RUNNER done, ' + secs + ' s'); GAMES.runner.api.done(secs); }   // score: her time in seconds, lower is better (menu.js MENU_OWN_TIME)
 }
 
 // ---- the bot that proves it can be finished (window.AUTO) ----
@@ -839,7 +864,7 @@ function bot(){
       if (d < any) { any = d; first = o; } if ((o.k === 'tram' || o.k === 'planter' || o.k === 'car') && d < hard) hard = d; }
     return {hard, any, first}; });
   const free = (l, a, b) => !obs.some(o => o.lane === l && o.s + o.len > P + a && o.s < P + b);
-  const loot = l => { let n = 0; for (const c of WORLD.coins) if (!c.got && !c.hide && c.lane === l && c.s > P && c.s < P + 18) n++; for (const b of WORLD.baos) if (!b.got && b.lane === l && b.s > P && b.s < P + 18) n += 2; return n; };
+  const loot = l => { let n = 0; for (const c of WORLD.coins) if (!c.got && !c.hide && c.lane === l && c.s > P && c.s < P + 18) n++; for (const b of WORLD.baos) if (!b.got && b.t >= DROP_T && b.lane === l && b.s > P && b.s < P + 18) n += 4; return n; };
   const cur = R.lane, look = 6 + v*0.9;
   let best = cur, bs = -1e9;
   for (let l = -1; l <= 1; l++) {
@@ -854,8 +879,9 @@ function bot(){
   const f = info[R.lane + 1].first;
   if (f && R.py <= 0.01 && R.rollT <= 0 && Math.abs(R.px - R.lane*LANE) < 0.35) {
     const d = f.s - P;
-    if (f.k === 'high' && d < v*0.26 && d > -0.2) roll();
-    else if ((f.k === 'low' || f.k === 'bin' || f.k === 'scooter') && d < v*0.34 && d > -0.1) jump();
+    const tj = (window.RUNNER_BOT || {}).jump || 0.34, tr = (window.RUNNER_BOT || {}).roll || 0.26;   // test hook: a late or early player
+    if (f.k === 'high' && d < v*tr && d > -0.2) roll();
+    else if ((f.k === 'low' || f.k === 'bin' || f.k === 'scooter') && d < v*tj && d > -0.1) jump();
   }
 }
 
@@ -894,6 +920,25 @@ function drawCard(){
   ctx.restore();
   ctx.globalAlpha = a*(0.7 + 0.3*(0.5 + 0.5*Math.sin(R.time*3))); title(L.cardGo, cx, cy + ch/2 + 44, 30, '#fff'); ctx.globalAlpha = 1;
 }
+// her time in the end menu's format ("41.2s", "1:04.3"), the same as every other timed game
+const rFmt = s => typeof menuFmt === 'function' ? menuFmt(s) : s.toFixed(1) + 's';
+// the coin bar (x, y, w, h) and the vending machine at its end (mx, my, mw, mh), top left under her time
+const HUD_BAR = {x: 22, y: 64, w: 150, h: 18, mx: 208, my: 44, mw: 50, mh: 70};
+// a little red vending machine: the label on top, bao zi behind the glass, buttons, the slot a bun drops out of
+function vendMachine(x, y, w, h, shake){
+  ctx.save(); ctx.translate(x + w/2 + (shake > 0 ? Math.sin(R.time*70)*4*shake/0.45 : 0), y - (shake > 0.3 ? 3 : 0)); ctx.lineJoin = 'round'; ctx.strokeStyle = C.line;
+  ctx.fillStyle = 'rgba(14,10,34,.35)'; rr(-w/2 + 4, 5, w, h, 7); ctx.fill();
+  ctx.lineWidth = 3; rr(-w/2, 0, w, h, 7); ctx.fillStyle = '#e0372f'; ctx.fill(); ctx.stroke();
+  rr(-w/2 + 4, 4, w - 8, 13, 4); ctx.fillStyle = '#fff6e6'; ctx.fill();
+  font(10, 700); ctx.fillStyle = '#e0372f'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINES_RUNNER.vend, 0, 11);
+  const gx = -w/2 + 5, gy = 21, gw = w - 20, gh = h - 43;
+  ctx.lineWidth = 2.5; rr(gx, gy, gw, gh, 3); ctx.fillStyle = '#bfe6f5'; ctx.fill();
+  for (const [u, v] of [[0.28, 0.3], [0.72, 0.3], [0.28, 0.75], [0.72, 0.75]]) baoAt(gx + gw*u, gy + gh*v, 6, true);
+  ctx.strokeStyle = C.line; ctx.lineWidth = 2.5; rr(gx, gy, gw, gh, 3); ctx.stroke();
+  for (let i = 0; i < 3; i++) { ell(w/2 - 7, gy + 5 + i*9, 3, 3); ctx.fillStyle = i ? '#ffd21f' : '#9be37b'; ctx.fill(); ctx.lineWidth = 1.5; ctx.stroke(); }
+  rr(-w/2 + 7, h - 17, w - 14, 10, 3); ctx.fillStyle = '#2a2140'; ctx.fill(); ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.restore();
+}
 function drawHud(){
   const replay = GAMES.runner.api && GAMES.runner.api.replay;
   const bw = Math.min(380, W*0.5), bx = W/2 - bw/2, by = 20, prog = clamp(R.pos/D, 0, 1);
@@ -905,21 +950,23 @@ function drawHud(){
   const zn = LINES_RUNNER.zone[zoneAt(R.pos)];
   font(16, 600); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.strokeStyle = C.line; ctx.lineWidth = 4; ctx.lineJoin = 'round';
   ctx.strokeText(zn, W/2, by + 24); ctx.fillText(zn, W/2, by + 24);
-  const cb = 1 + 0.35*R.coinBump/0.18;   // the coin counter bumps on every pickup, scaled about the coin icon
-  ctx.save(); ctx.translate(28, 32); ctx.scale(cb, cb); ctx.translate(-28, -32);
-  ell(28, 32, 12, 12); ctx.fillStyle = '#ffd21f'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.line; ctx.stroke();
-  font(26); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineWidth = 5; ctx.strokeStyle = C.line; ctx.strokeText('x' + R.coins, 48, 33); ctx.fillStyle = '#fff'; ctx.fillText('x' + R.coins, 48, 33);
-  ctx.restore();
-  if (R.boostV > 0.05) {   // the bao zi meter under the coins (clear of the ride's hearts): the bar runs down, stacked bao zi show as little buns
-    ctx.fillStyle = 'rgba(255,255,255,.4)'; rr(20, 60, 120, 12, 6); ctx.fill(); ctx.fillStyle = '#ff8a1f'; rr(20, 60, Math.max(10, 120*clamp(R.boostT/BOOST_T, 0, 1)), 12, 6); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = C.line; rr(20, 60, 120, 12, 6); ctx.stroke();
-    for (let i = 0; i < Math.round(R.heat); i++) { ell(28 + i*20, 88, 8, 7); ctx.fillStyle = '#fff6e6'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = C.line; ctx.stroke(); }
-  }
-  if (R.boostV > 0.05) {
-    ctx.save(); ctx.strokeStyle = `rgba(255,255,255,${0.6*R.boostV})`; ctx.lineCap = 'round';
-    const nl = 30 + Math.round(R.heat*4);
-    for (let i = 0; i < nl; i++) { const a = i*6.283/nl + (hsh(i, 3) % 100)*0.003, ph = (R.time*(4 + R.heat*0.4) + (hsh(i, 9) % 100)/100) % 1, r0 = W*0.18 + ph*W*0.3, r1 = r0 + W*0.12*R.boostV*(0.5 + ph)*(1 + R.heat*0.08);
-      ctx.lineWidth = 2 + ph*5; ctx.beginPath(); ctx.moveTo(W/2 + Math.cos(a)*r0*1.3, H*0.42 + Math.sin(a)*r0*0.85); ctx.lineTo(W/2 + Math.cos(a)*r1*1.3, H*0.42 + Math.sin(a)*r1*0.85); ctx.stroke(); }
-    ctx.restore();
+  // her time, top left, in the end menu's format; it flashes green when a bao zi takes a second off
+  const ct = rFmt(R.clk); font(34); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = C.line;
+  ctx.save(); const cs = 1 + 0.25*clamp(R.clkFx/0.9, 0, 1); ctx.translate(22, 32); ctx.scale(cs, cs); ctx.strokeText(ct, 0, 0); ctx.fillStyle = R.clkFx > 0 ? '#9be37b' : '#fff'; ctx.fillText(ct, 0, 0); ctx.restore();
+  // the coin bar under it, feeding the bao zi vending machine at its end (Max, 13 Oct)
+  const g = HUD_BAR, cb = 1 + 0.35*R.coinBump/0.18;
+  ctx.save(); ctx.translate(g.x + 10, g.y + g.h/2); ctx.scale(cb, cb); ell(0, 0, 12, 12); ctx.fillStyle = '#ffd21f'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.line; ctx.stroke(); ctx.restore();
+  const bx0 = g.x + 28;
+  ctx.fillStyle = 'rgba(29,22,64,.55)'; rr(bx0, g.y, g.w, g.h, g.h/2); ctx.fill();
+  const fr = clamp(R.bar/BAR_N, 0, 1); if (fr > 0) { ctx.fillStyle = '#ffd21f'; rr(bx0, g.y, Math.max(g.h, g.w*fr), g.h, g.h/2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.45)'; rr(bx0 + 4, g.y + 3, Math.max(g.h - 8, g.w*fr - 8), 4, 2); ctx.fill(); }
+  ctx.strokeStyle = C.line; ctx.lineWidth = 3; rr(bx0, g.y, g.w, g.h, g.h/2); ctx.stroke();
+  vendMachine(g.mx, g.my, g.mw, g.mh, R.vend);
+  // a bao zi falling from the machine's slot onto the track ahead of her (it joins the world once it lands)
+  for (const b of WORLD.baos) if (!b.got && b.t < DROP_T) {
+    const u = clamp(b.t/DROP_T, 0, 1), z = Math.max(b.s - R.pos + PZ, NEAR + 1), [tx, ty] = PJ(b.lane*LANE, 0.75, z), x0 = g.mx + g.mw/2, y0 = g.my + g.mh - 8;
+    const fx = u => x0 + (tx - x0)*u, fy = u => y0 + (ty - y0)*u*u - 90*u*(1 - u), rT = Math.max(0.42*RC.f/z, 9), fr = u => 16 + (rT - 16)*u;   // big enough to see on the way down
+    for (let i = 3; i >= 1; i--) { const w = Math.max(0, u - i*0.06); ctx.globalAlpha = 0.18*(4 - i); ell(fx(w), fy(w), fr(w)*0.8, fr(w)*0.7); ctx.fillStyle = '#fff6e6'; ctx.fill(); }   // a soft trail
+    ctx.globalAlpha = 1; baoAt(fx(u), fy(u), fr(u), true);
   }
   for (const p of R.sparks) { const u = p.t/0.2, [x, y] = PJ(p.lane*LANE + p.side*0.5, p.y + 0.35 + u*0.3, PZ); star(x, y, 0.12*RC.f/PZ*(1 - u)); }   // beside his head, alternating sides, never on his face
   for (const p of R.pops) { const [x, y] = PJ(p.x, p.y + p.t*1.2, PZ); ctx.globalAlpha = clamp(1 - p.t*p.t, 0, 1); title(p.text, x, y, p.big ? 44 : 32, '#fff7d6'); ctx.globalAlpha = 1; }
@@ -929,11 +976,11 @@ function drawHud(){
   if (!replay && R.msgT > 0 && R.msg) { const [x, y] = PJ(R.px, 1.3, PZ); ctx.globalAlpha = clamp(R.msgT*3, 0, 1); bubble(R.msg, clamp(x, 160, W - 160), y - 30, 28, Math.min(480, W*0.6)); ctx.globalAlpha = 1; }
   if (R.finish >= 0) {
     ctx.globalAlpha = clamp(R.finish*2, 0, 1);
-    if (replay) title(R.coins + ' ' + LINES_RUNNER.score, W/2, H*0.28, 66);
+    if (replay) title(rFmt(R.clk), W/2, H*0.28, 66);
     else { title(LINES_RUNNER.win, W/2, H*0.28, 66); ctx.globalAlpha = clamp((R.finish - 0.9)*2, 0, 1); title(LINES_RUNNER.win2, W/2, H*0.28 + 62, 30, '#fff'); }
     ctx.globalAlpha = 1;
   }
-  if (R.again && R.dead < 0 && R.inv > 0.9) { ctx.globalAlpha = clamp((R.inv - 0.9)*3, 0, 1); title(LINES_RUNNER.go, W/2, H*0.22, 54); ctx.globalAlpha = 1; }
+  if (R.again && R.dead < 0 && R.inv > INV_T - 0.7) { ctx.globalAlpha = clamp((R.inv - (INV_T - 0.7))*3, 0, 1); title(LINES_RUNNER.go, W/2, H*0.22, 54); ctx.globalAlpha = 1; }
   if (R.card > 0) drawCard();
 }
 
@@ -945,9 +992,9 @@ GAMES.runner = {
     if (!hookUsed) { hookUsed = true; try { const v = +new URLSearchParams(location.search).get('coins'); if (v > 0) startCoins = Math.floor(v); } catch (e) {} }   // test hook ?coins=N (first entry only)
     if (!WORLD) WORLD = build();
     reset(false);
-    console.log('RUNNER start (D=' + D + ', ' + WORLD.obs.length + ' obstacles, ' + WORLD.coins.length + ' coins, ' + WORLD.lines.length + ' coin lines)');
+    console.log('RUNNER start (D=' + D + ', ' + WORLD.obs.length + ' obstacles in ' + WORLD.rows.length + ' rows, ' + WORLD.coins.length + ' coins, ' + (CPS.length - 1) + ' checkpoints)');
   },
-  peek(){ return {pos: R.pos, dead: R.dead, cp: R.cp, crashes: R.crashes, time: R.time, coins: R.coins, speed: R.speed, heat: R.heat, nbao: R.nbao, card: R.card, lane: R.lane,
+  peek(){ return {clk: R.clk, bar: R.bar, perCp: WORLD ? CPS.map((c, i) => [c, WORLD.coins.filter(o => o.s >= c && o.s < (CPS[i + 1] || D)).length, WORLD.obs.filter(o => o.s >= c && o.s < (CPS[i + 1] || D)).length]) : [], baos: WORLD ? WORLD.baos.map(b => ({s: +b.s.toFixed(1), lane: b.lane, t: +b.t.toFixed(2), got: b.got})) : [], pos: R.pos, dead: R.dead, cp: R.cp, crashes: R.crashes, time: R.time, coins: R.coins, speed: R.speed, heat: R.heat, nbao: R.nbao, card: R.card, lane: R.lane,
     near: WORLD ? WORLD.obs.filter(o => o.s - R.pos > 0 && o.s - R.pos < 14).map(o => ({k: o.k, d: +(o.s - R.pos).toFixed(1), lane: o.lane})) : []}; },   // test hook
   draw(t, dt){ if (!WORLD) return; step(dt); drawWorld(); drawHud(); },
   key(e){

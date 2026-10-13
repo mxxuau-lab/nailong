@@ -1,24 +1,25 @@
 "use strict";
 // ---------- the end menu: every game, her best, Max's high score underneath ----------
 // Most games score seconds from enter to api.done (lower is better). A game in MENU_SCORED ends with api.done(n) and
-// scores n instead, higher is better (the runner's coins); one in MENU_OWN_TIME passes its own seconds (the 360). main.js calls MENU.record(id, secs, score).
+// scores n instead, higher is better (none at the moment); one in MENU_OWN_TIME passes its own seconds (the 360, Civic Dash). main.js calls MENU.record(id, secs, score).
 // Her bests persist in localStorage (try/catch everywhere; works with no storage at all).
 
-// TODO Max sets these after playing: his real time in seconds for each game (the runner: his coins). These are placeholders.
+// TODO Max sets these after playing: his real time in seconds for each game. These are placeholders.
 const MAX_SCORES = {
   octagon: 64.0,     // SECONDS (1:04.0), lower is better: a clean run with no bonks is about 61.6 s, so this is a good run with a few bonks and no falls. TODO Max sets this after playing
   tetris: 150,       // TODO Max sets these after playing
   bottlesort: 100,   // TODO Max sets these after playing
   battle: 150,       // TODO Max sets these after playing
   pingpong: 180,     // TODO Max sets these after playing
-  runner: 120,       // COINS, higher is better. TODO Max sets this after playing (he wants it high so she keeps playing)
+  runner: 98.0,      // SECONDS (1:38.0), lower is better: a clean run is about 1:44 on the clock before bao zi (each takes 1 s off), so this is a clean run that ate about six. TODO Max sets this after playing
   blockblast: 180,   // TODO Max sets these after playing
 };
 // games scored by a number they pass to api.done (higher is better) instead of seconds, and the unit it is shown in
-const MENU_SCORED = {runner: 'coins'};
+const MENU_SCORED = {};   // (Civic Dash was scored in coins until 13 Oct; it is a time now, see MENU_OWN_TIME)
 // timed games that time themselves and pass their own seconds to api.done (lower is better, shown like every other time):
 // the 360 counts from the first start to the finish ring, without its instruction card (Max, 13 Oct: "this way we can do a timer")
-const MENU_OWN_TIME = {octagon: true};
+// Civic Dash counts from the card to the finish line, through crashes, minus 1 s per bao zi (Max, 13 Oct: "the score for everything should be in time, including this one")
+const MENU_OWN_TIME = {octagon: true, runner: true};
 
 const LINES_MENU = {
   title: 'PLAY IT AGAIN',                         // TODO joke
@@ -64,6 +65,9 @@ const LINES_MENU = {
   },
   pokeTwice: 'You fell for it TWICE? Nailong is so disappointed.',   // placeholder, Max to edit (she pressed pay on the lives screen before)
   pokeOnce: 'You really thought that was real?',                     // placeholder, Max to edit (she never pressed pay before)
+  // Max's head laughing beside that line (Max, 13 Oct: "you really thought that was real should have my character laughing"):
+  // the sound-words that pop around him, one per "ha"
+  laugh: ['HA', 'HA', 'HA!'],                                         // placeholder, Max to edit
   minuteOff: 'I took one minute off the timer for you though :)',    // Max's line
 };
 // The 12 hour wait (Max, 12 Oct: "to skip the 12h play again timer there's a pay $10"). Counted from when she first reaches the menu,
@@ -75,7 +79,7 @@ const MENU_GAMES = [
   {id: 'octagon',    name: 'THE 360',              icon: 'octagon'},
   {id: 'tetris',     name: 'NAILONG TETRIS',       icon: 'tetris'},
   {id: 'bottlesort', name: 'RESTOCK THE FRIDGE',   icon: 'bottles'},
-  {id: 'battle',     name: 'THE TEXTBOOK BOUT',    icon: 'book'},
+  {id: 'battle',     name: 'THE TEXTBOOK FIGHT',   icon: 'book'},
   {id: 'pingpong',   name: 'NAILONG PING PONG',    icon: 'paddle'},
   {id: 'runner',     name: 'CIVIC DASH',           icon: 'car'},
   {id: 'blockblast', name: 'NAILONG BLOCK BLAST',  icon: 'blocks'},
@@ -110,11 +114,11 @@ const MENU = {
 
   load() {
     // the 360 used to be scored in metres; a best saved before it became a time (no octagonTime mark) is dropped, never read as seconds
-    try { const o = JSON.parse(localStorage.getItem(MENU_KEY) || '{}'); for (const k in o) if ((k !== 'octagon' || o.octagonTime) && k !== 'octagonTime' && typeof o[k] === 'number' && (o[k] > 0 || (MENU_SCORED[k] && o[k] >= 0))) this.bests[k] = o[k]; } catch (e) { /* no storage: memory only */ }
+    try { const o = JSON.parse(localStorage.getItem(MENU_KEY) || '{}'); for (const k in o) if ((k !== 'octagon' || o.octagonTime) && (k !== 'runner' || o.runnerTime) && k !== 'octagonTime' && k !== 'runnerTime' && typeof o[k] === 'number' && (o[k] > 0 || (MENU_SCORED[k] && o[k] >= 0))) this.bests[k] = o[k]; } catch (e) { /* no storage: memory only */ }
   },
   save() {
     if (this.noStore) return;
-    try { localStorage.setItem(MENU_KEY, JSON.stringify({...this.bests, octagonTime: 1})); } catch (e) { /* no storage: memory only */ }
+    try { localStorage.setItem(MENU_KEY, JSON.stringify({...this.bests, octagonTime: 1, runnerTime: 1})); } catch (e) { /* no storage: memory only */ }
   },
   testRun() { const q = new URLSearchParams(location.search); return window.AUTO || q.get('hold') === '1' || q.has('sim'); },
   // the 12 hour wait: the first time she reaches the menu starts it; each fake payment takes a minute off
@@ -161,7 +165,7 @@ const MENU = {
       this.booted = true; this.load();
       if (q.get('demo')) {   // test hook: fake times in memory only, never saved
         this.noStore = true;
-        Object.assign(this.bests, {octagon: 66.3, tetris: 210.4, bottlesort: 88.8, battle: 97.5, runner: 42});
+        Object.assign(this.bests, {octagon: 66.3, tetris: 210.4, bottlesort: 88.8, battle: 97.5, runner: 101.4});
       }
       if (q.get('celebrate') && !res) { const id = q.get('celebrate'), v = MENU_SCORED[id] ? Math.round(MAX_SCORES[id] * 1.5) : MAX_SCORES[id] * 0.6; this.bests[id] = v; res = {id, secs: v, best: v, isPB: true, beatMax: true}; }
     }
@@ -428,6 +432,11 @@ const MENU = {
       const rise = ease(clamp(u / .55, 0, 1)), nx = W * .15, ny = H + 280 - rise * 310;
       nailong(nx, ny, 1.3, {look: [.8, -.1], mouth: 'open', arms: 'up', flail: t * 3});
       if (u > .5) bubble(this.fellBefore() ? LINES_MENU.pokeTwice : LINES_MENU.pokeOnce, nx + 300, ny - 250, 46, Math.min(620, W * .5));
+      if (u > LAUGH.at && !this.fellBefore()) {   // with "You really thought that was real?": Max's head pops up top right, laughing
+        const a = u - LAUGH.at;
+        LAUGH.has.forEach((at, i) => { if (a >= at) once('ha' + i, () => window.SFX && SFX.play('oof', {p: LAUGH.p[i], g: .55})); });
+        menuMaxLaugh(Math.min(W * .8, W - 200), H * .3, LAUGH.s, a);   // on a narrow window it keeps clear of the right edge
+      }
       if (u > PAY.maxLine) {
         once('minute', () => { this.takeMinute(); window.SFX && SFX.play('coin', {p: 1.2}); });
         const k = fxBack(clamp((u - PAY.maxLine) / .35, 0, 1));
@@ -485,6 +494,44 @@ const MENU = {
 
 // the fake checkout's clock (seconds): to black, the redirect text, the page (3 s on its own), the poke, Max's line, Enter works, auto close
 const PAY = {black: .7, page: 3.3, poke: 6.4, maxLine: 1.6, ready: 9.4, auto: 16};
+// Max laughing at the poke (seconds after the poke): his head pops in just after the bubble, a "ha" every 0.16 s (the 'oof' voice
+// pitched up, falling a little each time, so it reads as "HA ha ha ha ha"), s = his head's size
+const LAUGH = {at: .55, has: [.05, .21, .37, .53, .69], p: [2.3, 2.2, 2.1, 2.0, 1.85], s: 1.7};
+
+// Max's head (person() clipped just under the chin, like main.js's maxFace) laughing: it pops in, bounces on every "ha" and tips
+// back, eyes squeezed shut (two upturned arcs over the face), mouth wide open, and LINES_MENU.laugh pops around him. (x, y) = the
+// head's centre, a = seconds since it started
+function menuMaxLaugh(x, y, s, a) {
+  const p = CAST.max, k = s * p.h, beat = Math.abs(Math.sin(a * 11)), z = fxBack(clamp(a / .3, 0, 1));
+  if (z <= .01) return;
+  ctx.save(); ctx.translate(x, y - beat * 12 * k); ctx.rotate(-.16 + Math.sin(a * 11) * .07); ctx.scale(z, z);
+  ctx.save(); ell(0, -4 * k, 56 * k, 50 * k); ctx.clip();
+  person(0, 218 * k, s, p, {mouth: 'smile', look: [0, -.3]});
+  // over the face, in person()'s own units
+  ctx.translate(0, 218 * k); ctx.scale(k, k); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const ex of [-13, 13]) {
+    ell(ex, -220, 7, 5.6); ctx.fillStyle = p.skin; ctx.fill();   // the open eyes go...
+    ctx.beginPath(); ctx.moveTo(ex - 6.5, -217); ctx.quadraticCurveTo(ex, -227, ex + 6.5, -217); ctx.strokeStyle = C.line; ctx.lineWidth = 3.4; ctx.stroke();   // ...squeezed shut
+    ell(ex + (ex < 0 ? -12 : 12), -210 + (a * 1.3 % 1) * 10, 2.6, 3.6); ctx.fillStyle = 'rgba(120,200,255,.85)'; ctx.fill();   // a tear of laughter rolling down
+  }
+  const open = .65 + .35 * beat, mb = -204 + 22 * open;   // the mouth opens wider on every "ha"
+  const mouth = () => { ctx.beginPath(); ctx.moveTo(-16, -205); ctx.quadraticCurveTo(0, -207, 16, -205); ctx.quadraticCurveTo(15, mb, 0, mb + 1); ctx.quadraticCurveTo(-15, mb, -16, -205); ctx.closePath(); };
+  mouth(); ctx.fillStyle = '#6a1c26'; ctx.fill();
+  ctx.save(); mouth(); ctx.clip();
+  ctx.fillStyle = '#fff'; ctx.fillRect(-17, -208, 34, 6);               // top teeth
+  ell(0, mb - 1, 9, 6); ctx.fillStyle = '#e8707e'; ctx.fill();          // tongue
+  ctx.restore();
+  mouth(); ctx.strokeStyle = C.line; ctx.lineWidth = 3; ctx.stroke();
+  ctx.restore();
+  // the sound-words, one per "ha", popping around his head (clear of the bubble and the minute line)
+  const spots = [[-1.55, -.95, -.25], [1.35, -.9, .2], [1.45, .45, .12]];
+  LINES_MENU.laugh.forEach((w, i) => {
+    const t0 = .12 + i * .24, q = a - t0; if (q <= 0) return;
+    const [sx, sy, r] = spots[i % spots.length], zz = fxBack(clamp(q / .2, 0, 1)) * (1 + .08 * Math.sin(a * 11 + i));
+    ctx.save(); ctx.translate(sx * 56 * k, sy * 50 * k); ctx.rotate(r); ctx.scale(zz, zz); title(w, 0, 0, 30 * k, C.y); ctx.restore();
+  });
+  ctx.restore();
+}
 
 // a padlock: body and shackle, drawn around (x, y)
 function menuLock(x, y, s) {
@@ -575,7 +622,7 @@ function menuIcon(kind, cx, cy, s, c, ok, a) {
     ctx.restore();
   } else if (kind === 'paddle') {
     ctx.save(); ctx.rotate(-.5 + Math.sin(c * 6) * a * .15);
-    rr(-9, 20, 18, 46, 6); fill('#c9925c'); ell(0, -8, 38, 44); fill('#e8423b'); ell(0, -8, 26, 32); ctx.lineWidth = 3; ctx.stroke(); ctx.restore();
+    rr(-9, 20, 18, 46, 6); fill('#c9925c'); ell(0, -8, 38, 44); fill('#e8423b'); ctx.restore();   // a plain bat, like the game's (Max, 13 Oct: "plain without the weird edges")
     ell(42, -34 + Math.sin(c * 8) * a * 8, 11, 11); fill('#fff');
   } else if (kind === 'car') {
     ctx.save(); ctx.translate(0, Math.sin(c * 14) * a * 2);

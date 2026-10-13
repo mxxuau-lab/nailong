@@ -33,6 +33,12 @@ const durOr = (v, fallback) => typeof v === 'number' && v > 0 ? v : fallback;
 // The order (Max, 12 Oct 21:20: "it's important we start off strong ... the strongest in the whole thing is the chinese room so I'd
 // like to start with that, and then we have nai long coming out "What a fun and nice teacher" and then Mr. Shou next providing a
 // stark contrast"; the octagon is the last school scene before the car). sceneFall is out of the ride (its code stays in story.js).
+const HAS_DRIFT = typeof window.sceneDrift === 'function';
+const ESC_SKIP = 4.7;   // sceneEscape's first 4.7 s are the library window and the run to the car: the drift clip replaces them
+function sceneEscapeInCar(t, dt){
+  sceneEscape(t + ESC_SKIP, dt);
+  if (t < 0.25) { ctx.fillStyle = `rgba(29,22,64,${1 - t/0.25})`; ctx.fillRect(0, 0, W, H); }   // a quick fade in from the drift's navy
+}
 const FLOW = [
   typeof window.sceneIntro === 'function' && typeof INTRO === 'object' && {scene: sceneIntro, intro: true},   // story-intro.js: Max says hi, "Have you got 15 min?", Yes: "Nailong, sending you to BCC" and the toss
   {lives: true},                                // "You have 3 lives." card, any key after 1.5 s
@@ -48,8 +54,12 @@ const FLOW = [
   {scene: sceneCafe3, dur: durOr(typeof CAFE3_DUR !== 'undefined' && CAFE3_DUR, 7.8)},
   {scene: clipFn('sceneChase', sceneSlide), dur: durOr(typeof CHASE_DUR !== 'undefined' && CHASE_DUR, durOr(typeof SLIDE_DUR !== 'undefined' && SLIDE_DUR, 12.2))},   // the Mr Shou chase along the real route (story-chase.js; Max, 13 Oct), into the slide
   {game: 'octagon'},                            // the last school scene before the car
-  {scene: sceneLLC, dur: durOr(typeof LLC_DUR !== 'undefined' && LLC_DUR, typeof S2_LLC_DUR !== 'undefined' ? S2_LLC_DUR : 20.2)},
-  {scene: sceneEscape, dur: durOr(CANBERRA_DUR.sceneEscape, 10.4)},
+  // Max, 13 Oct: "we don't need the library scene ... nai long tumbles from the junior school out the window and slowly comedically
+  // drifts into the car" (story-drift.js). The drift ends with him in the driver's seat, so the escape clip starts at its own 4.7 s.
+  HAS_DRIFT ? {scene: window.sceneDrift, dur: durOr(window.DRIFT_DUR, 8)}
+            : {scene: sceneLLC, dur: durOr(typeof LLC_DUR !== 'undefined' && LLC_DUR, typeof S2_LLC_DUR !== 'undefined' ? S2_LLC_DUR : 20.2)},
+  HAS_DRIFT ? {scene: sceneEscapeInCar, dur: durOr(CANBERRA_DUR.sceneEscape, 10.4) - ESC_SKIP}
+            : {scene: sceneEscape, dur: durOr(CANBERRA_DUR.sceneEscape, 10.4)},
   {scene: sceneCivic, dur: durOr(CANBERRA_DUR.sceneCivic, 11)},
   {game: 'runner'},
   {scene: sceneBridge, dur: durOr(CANBERRA_DUR.sceneBridge, 12.9)},
