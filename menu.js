@@ -5,14 +5,14 @@
 // Her bests persist in localStorage (try/catch everywhere; works with no storage at all).
 
 // TODO Max sets these after playing: his real time in seconds for each game. These are placeholders.
-const MAX_SCORES = {
-  octagon: 64.0,     // SECONDS (1:04.0), lower is better: a clean run with no bonks is about 61.6 s, so this is a good run with a few bonks and no falls. TODO Max sets this after playing
-  tetris: 38.0,      // Max, 13 Oct: "give a really decent tetris score and ping pong score but they both have to be beatable with good precision" (the perfect bot does 13.7 s)
-  bottlesort: 55.0,  // a good human run (the perfect bot does 32 s); same standard as Max's tetris and ping pong
-  battle: 70.0,      // a good human run (the perfect bot does about 50 s)
-  pingpong: 90.0,    // Max won 11-0 (time not taken); the perfect bot's 11-0 takes about 79 s, so 1:30 needs a near-perfect match
-  runner: 98.0,      // SECONDS (1:38.0), lower is better: a clean run is about 1:44 on the clock before bao zi (each takes 1 s off), so this is a clean run that ate about six. TODO Max sets this after playing
-  blockblast: 35.0,  // a good human run on the 5x5 finale (the perfect bot does 24 s, a decent first-timer about 42 s)
+const MAX_SCORES = {   // Max, 13 Oct: "if you end with 0 it looks fake ... round them to be a bit random"
+  octagon: 63.7,     // SECONDS (1:04.0), lower is better: a clean run with no bonks is about 61.6 s, so this is a good run with a few bonks and no falls. TODO Max sets this after playing
+  tetris: 37.4,      // Max, 13 Oct: "give a really decent tetris score and ping pong score but they both have to be beatable with good precision" (the perfect bot does 13.7 s)
+  bottlesort: 53.8,  // a good human run (the perfect bot does 32 s); same standard as Max's tetris and ping pong
+  battle: 68.3,      // a good human run (the perfect bot does about 50 s)
+  pingpong: 87.6,    // Max won 11-0 (time not taken); the perfect bot's 11-0 takes about 79 s, so 1:30 needs a near-perfect match
+  runner: 96.9,      // SECONDS (1:38.0), lower is better: a clean run is about 1:44 on the clock before bao zi (each takes 1 s off), so this is a clean run that ate about six. TODO Max sets this after playing
+  blockblast: 34.2,  // a good human run on the 5x5 finale (the perfect bot does 24 s, a decent first-timer about 42 s)
 };
 // games scored by a number they pass to api.done (higher is better) instead of seconds, and the unit it is shown in
 const MENU_SCORED = {};   // (Civic Dash was scored in coins until 13 Oct; it is a time now, see MENU_OWN_TIME)
