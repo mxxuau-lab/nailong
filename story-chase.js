@@ -12,7 +12,7 @@
 const LINES_CHASE = {
   shout: 'NAILONG!',                                    // Mr Shou (from Max's "Nailong! You're cooked!", as in sceneCafe3)
   sportsSign: ['SPORTS & PERFORMING', 'ARTS CENTRE'],   // the real sign on the stone wall
-  doors: ['TR1', 'TR2', 'TR3'],                         // the real door labels in the small rooms courtyard
+  doors: ['TR1', 'TR2', 'TR3', 'TR4', 'TR5'],           // the real door labels in the small rooms courtyard (Max, 13 Oct: "TR5 is the furthest on the right and TR1 on the left")
   hubSign: ['PRIMARY SCHOOL', 'HUB'],                   // the real sign on the stone chimney
   swish: 'SWISH!',                                      // placeholder, Max to edit: the book drops through the netball ring (sound word)
   slideBig: "Oh, it's bigger than it looks.",           // Max's line
@@ -189,11 +189,11 @@ function chCourt(gy){
     if (i % 3 === 1) { chRect(wx + X(0.065), ob + 36, 40, 34, '#f1f1f1', 3, 3); ell(wx + X(0.065) + 20, ob + 53, 11, 11); ctx.lineWidth = 2; ctx.stroke(); } }
   chRect(x0, rf, ww, 14, '#8e959c', 4);                                                         // the classrooms' roof edge
   chBricks(x0, rf + 14, ww, rail - rf - 14);
-  const doorX = [X(0.2), X(0.56), X(0.92)], dw = Math.max(X(0.06), 62);
+  const doorX = [X(0.1), X(0.32), X(0.54), X(0.76), X(0.98)], dw = Math.max(X(0.06), 62);   // drawn mirrored: the first door ends up furthest right, so it is TR5
   doorX.forEach((dx, i) => {
     chRect(dx, rf + 50, dw, rail - rf - 50, '#3a3f45', 4, 2); chRect(dx + 8, rf + 60, dw - 16, 40, '#6f8794', 3, 2);
     chRect(dx - 6, rf + 20, dw + 12, 26, '#f4f4f4', 3, 3);
-    font(20, 700); ctx.fillStyle = '#17181c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINES_CHASE.doors[i], dx + dw/2, rf + 34);
+    font(20, 700); ctx.fillStyle = '#17181c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINES_CHASE.doors[LINES_CHASE.doors.length - 1 - i], dx + dw/2, rf + 34);
   });
   for (let i = 0; ; i++) {                                                                      // bags on hooks along the brick, two rows
     const bx = x0 + 20 + i*34; if (bx > x1) break;

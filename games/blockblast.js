@@ -1,7 +1,5 @@
 // ---------- Block Blast, Nailong edition: CLEAR THE ROAD ----------
-// The board is a small, fast Block Blast (Max, 13 Oct: "a smaller version than the real game, where there's 5x5 ... it should feel
-// quite fast paced and scary, as in nai long is driving the car wildly and crony has to clear the path as fast as possible as the
-// car gets closer and closer"): a 5x5 grid, three pieces in a tray, drag a piece onto the grid (no rotation),
+// The board is the real Block Blast: 8x8 grid, three pieces in a tray, drag a piece onto the grid (no rotation),
 // any full row or column clears, a new tray once all three are placed, the lines about to clear light up.
 // Max's twist (12 Oct): Nailong drives Crony's grey Camry over an arched bridge on Lake Burley Griffin. The jelly
 // blocks that fell in the bridge clip sit on the road. Every row or column she clears blasts the next roadblock
@@ -34,42 +32,36 @@ const LINES_BB = {
 };
 const BB_COLS = ['#FFD21F', '#ff7a3d', '#ef476f', '#4fa8ff', '#52c56a', '#a77bf0', '#ff9ec4', '#5a3b14'];
 // ---- the road: one level, tuned so a quick player finishes in about 45 to 70 s ----
-// The blocks sit evenly along the bridge and the car keeps speeding up as it crosses: calm to the first block, then
-// faster and faster (BB_RAMP), so each block comes sooner than the one before.
 const BB_N = 8;                  // roadblocks on the bridge
-const BB_V0 = 0.0165;            // the car's steady speed at the start, in bridge lengths per second
-const BB_RAMP = 1.4;             // by the last block the steady speed is this many times the start speed
-const BB_LAST = 0.985;           // where the last roadblock stands (the bridge runs 0 to 1)
+const BB_V0 = 0.0165;            // the car's steady speed, in bridge lengths per second
 const BB_FIRST = 14;             // seconds of driving before the car reaches the first block (was 9; Max, 13 Oct: "give crony a bit more time on the first block so she can get her bearings")
+const BB_GAP = 6.5;              // seconds of driving between blocks at the steady speed (a line every 6.5 s keeps up)
 const BB_U0 = -0.05, BB_FIN = 1.04;   // the car starts on the left shore and finishes on the right shore
 const BB_PHI = Math.PI * 0.2;    // the bridge is 20% of a circle: 72 degrees of arc, so its ends slope at 36
 const BB_CAR = 0.28;             // car scale (camry() from story-canberra.js)
 const BB_RC = 17;                // roadblock cell size
-const BB_D0 = 1.7, BB_D1 = 1;   // in block spacings: clear more than 1.7 blocks ahead and the car speeds up to catch up
+const BB_D0 = BB_GAP * BB_V0 * 1.7, BB_D1 = BB_GAP * BB_V0;   // clear more than 1.7 blocks ahead and the car speeds up
 const BB_CARD = 6;               // the instruction card stays until a key or click, at most 6 s
 const BB_CRASH = 1.5;            // seconds of crash before the instant retry
-const BB_MERCY = 0.3;            // after each crash the car drives slower (1 / (1 + 0.3 per crash), counted up to 4 crashes), so a slow player always gets across; 0 turns it off
-const bbRampK = () => clamp((BB.u - BB.u1) / Math.max(0.01, BB_LAST - bbMargin0() - BB.u1), 0, 1);   // 0 at the first block, 1 at the last
-const bbMargin0 = () => (230 * BB_CAR + BB_RC + 2) / 900;
-const bbV0 = () => BB_V0 * lerp(1, BB_RAMP, bbRampK()) / (1 + BB_MERCY * Math.min(BB.fails || 0, 4));   // the steady speed for this try, here on the bridge
+const BB_MERCY = 0.15;           // after each crash the car drives 15% slower (counted up to 4 crashes), so a slow player always gets across; 0 turns it off
+const bbV0 = () => BB_V0 / (1 + BB_MERCY * Math.min(BB.fails || 0, 4));   // the steady speed for this try
 const BB_ZAP = 0.25;             // seconds for the spark to fly from the cleared line to the roadblock
 // fallen blocks already on the board at the start (digits are colours): one domino in the tray clears the bottom row
-const BB_S = 5;                  // the board is BB_S x BB_S
 const BB_FALLEN = [
-  '.....', '.....', '.....',
-  '3...6',
-  '42..1',
+  '........', '........', '........', '........', '........', '........',
+  '42....15',
+  '334..661',
 ];
 // roadblock shapes, cells as [row from the road up, col]
 const BB_RSHAPES = [[[0, 0], [0, 1], [1, 0], [1, 1]], [[0, 0], [1, 0]], [[0, 0], [0, 1], [1, 1]], [[0, 0], [0, 1]], [[0, 0], [1, 0], [1, 1]]];
-// piece families: [rows, weight, colour index]; every rotation / mirror is generated and de-duplicated.
-// Small pieces only (no 3x3, no 2x3): on a 5x5 board a big piece is a wall, and a tray that cannot go down is a crash.
+// piece families: [rows, weight, colour index]; every rotation / mirror is generated and de-duplicated
 const BB_FAMILIES = [
-  [['#'], 0.7, 0],
-  [['##'], 1.4, 3], [['###'], 1.3, 4], [['####'], 0.5, 5], [['#####'], 0.25, 6],
-  [['##', '##'], 0.9, 0],
-  [['#.', '##'], 1.6, 3], [['#.', '#.', '##'], 0.7, 4], [['###', '.#.'], 0.6, 5],
-  [['.##', '##.'], 0.4, 2],
+  [['#'], 0.35, 0],
+  [['##'], 1, 3], [['###'], 1.4, 4], [['####'], 1.1, 5], [['#####'], 0.7, 6],
+  [['##', '##'], 1.6, 0], [['###', '###', '###'], 0.9, 1], [['##', '##', '##'], 1, 2],
+  [['#.', '##'], 1.7, 3], [['#..', '#..', '###'], 1, 6],
+  [['#.', '#.', '##'], 1.5, 4], [['###', '.#.'], 1.4, 5],
+  [['.##', '##.'], 1.3, 2], [['##', '##', '#.'], 0.8, 1],
 ];
 function bbVariants(rows) {
   const cells = [];
@@ -91,47 +83,41 @@ const BB_Q = typeof location !== 'undefined' ? new URLSearchParams(location.sear
 // test hooks: ?seed=N makes the piece sequence repeatable; &botgap=S slows the bot to a human pace (seconds between drops)
 let bbSeed = BB_Q.get('seed') | 0;
 const BB_BOTGAP = +(BB_Q.get('botgap') || 0) || 0.18;
-const BB_BOTSLOP = +(BB_Q.get('botslop') || 0) || 0;   // &botslop=P: the bot drops a piece somewhere random with chance P (a sloppy first-timer)
 const bbRand = () => { if (!bbSeed) return Math.random(); bbSeed = (bbSeed + 0x6D2B79F5) | 0; let t = Math.imul(bbSeed ^ (bbSeed >>> 15), 1 | bbSeed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-// a crowded board (BB_CROWD cells or more) only gets small pieces (3 cells or fewer), so a full-ish 5x5 rarely locks up
-const BB_CROWD = 10;
-const BB_SMALL = BB_SETS.filter(s => s.vars[0].cells.length <= 3), BB_WTS = BB_SMALL.reduce((a, s) => a + s.wt, 0);
-function bbRandPiece(small) {
-  const sets = small ? BB_SMALL : BB_SETS;
-  let x = bbRand() * (small ? BB_WTS : BB_WT), f = sets[0];
-  for (const s of sets) { x -= s.wt; if (x <= 0) { f = s; break; } }
+function bbRandPiece() {
+  let x = bbRand() * BB_WT, f = BB_SETS[0];
+  for (const s of BB_SETS) { x -= s.wt; if (x <= 0) { f = s; break; } }
   const v = f.vars[Math.floor(bbRand() * f.vars.length)];
   return { cells: v.cells, w: v.w, h: v.h, col: f.col + 1, id: bbRand() };
 }
 
-// ---- pure board logic (board = array of BB_S*BB_S, 0 empty, else colour index + 1) ----
-const BB_SS = BB_S * BB_S;
+// ---- pure board logic (board = array of 64, 0 empty, else colour index + 1) ----
 function bbFits(b, p, r, c) {
-  if (r < 0 || c < 0 || r + p.h > BB_S || c + p.w > BB_S) return false;
-  for (const [pr, pc] of p.cells) if (b[(r + pr) * BB_S + c + pc]) return false;
+  if (r < 0 || c < 0 || r + p.h > 8 || c + p.w > 8) return false;
+  for (const [pr, pc] of p.cells) if (b[(r + pr) * 8 + c + pc]) return false;
   return true;
 }
 function bbApply(b, p, r, c) {
   const nb = b.slice();
-  for (const [pr, pc] of p.cells) nb[(r + pr) * BB_S + c + pc] = p.col;
+  for (const [pr, pc] of p.cells) nb[(r + pr) * 8 + c + pc] = p.col;
   const rows = [], cols = [];
-  for (let i = 0; i < BB_S; i++) {
+  for (let i = 0; i < 8; i++) {
     let rf = true, cf = true;
-    for (let j = 0; j < BB_S; j++) { if (!nb[i * BB_S + j]) rf = false; if (!nb[j * BB_S + i]) cf = false; }
+    for (let j = 0; j < 8; j++) { if (!nb[i * 8 + j]) rf = false; if (!nb[j * 8 + i]) cf = false; }
     if (rf) rows.push(i); if (cf) cols.push(i);
   }
   const gone = [];
-  for (let i = 0; i < BB_SS; i++) { const rr_ = Math.floor(i / BB_S), cc = i % BB_S; if (nb[i] && (rows.includes(rr_) || cols.includes(cc))) gone.push({ r: rr_, c: cc, col: nb[i] }); }
-  for (const g of gone) nb[g.r * BB_S + g.c] = 0;
+  for (let i = 0; i < 64; i++) { const rr_ = i >> 3, cc = i & 7; if (nb[i] && (rows.includes(rr_) || cols.includes(cc))) gone.push({ r: rr_, c: cc, col: nb[i] }); }
+  for (const g of gone) nb[g.r * 8 + g.c] = 0;
   return { b: nb, lines: rows.length + cols.length, rows, cols, gone };
 }
-function bbAnyFit(b, p) { for (let r = 0; r <= BB_S - p.h; r++) for (let c = 0; c <= BB_S - p.w; c++) if (bbFits(b, p, r, c)) return true; return false; }
+function bbAnyFit(b, p) { for (let r = 0; r <= 8 - p.h; r++) for (let c = 0; c <= 8 - p.w; c++) if (bbFits(b, p, r, c)) return true; return false; }
 function bbSolvable(b, ps, budget) {
   if (!ps.length) return true;
   if (budget.n-- < 0) return false;
   for (let i = 0; i < ps.length; i++) {
     const p = ps[i], rest = ps.filter((_, j) => j !== i);
-    for (let r = 0; r <= BB_S - p.h; r++) for (let c = 0; c <= BB_S - p.w; c++) {
+    for (let r = 0; r <= 8 - p.h; r++) for (let c = 0; c <= 8 - p.w; c++) {
       if (!bbFits(b, p, r, c)) continue;
       if (bbSolvable(bbApply(b, p, r, c).b, rest, budget)) return true;
       if (budget.n < 0) return false;
@@ -143,10 +129,10 @@ function bbSolvable(b, ps, budget) {
 // ---- state ----
 const BB = {};
 function bbReset(fails, card) {
-  const board = new Array(BB_SS).fill(0);
-  BB_FALLEN.forEach((row, r) => [...row].forEach((ch, c) => { if (ch !== '.') board[r * BB_S + c] = +ch; }));
+  const board = new Array(64).fill(0);
+  BB_FALLEN.forEach((row, r) => [...row].forEach((ch, c) => { if (ch !== '.') board[r * 8 + c] = +ch; }));
   // roadblocks: evenly spaced in driving time; the margin is car half length + block half, on a typical 900-unit bridge
-  const m0 = bbMargin0(), f1 = BB_U0 + m0 + BB_FIRST * BB_V0, df = (BB_LAST - f1) / Math.max(1, BB_N - 1);
+  const m0 = (230 * BB_CAR + BB_RC + 2) / 900, f1 = BB_U0 + m0 + BB_FIRST * BB_V0, df = BB_GAP * BB_V0;
   Object.assign(BB, {
     board, kb: null, kbBad: 0, hand: [null, null, null], combo: 0, miss: 0, placed: 0,
     drag: null, ret: null, fx: [], parts: [], pops: [], pop: {}, shake: 0, freeze: 0, jet: 0, t: 0,
@@ -157,7 +143,6 @@ function bbReset(fails, card) {
     fly: [], splash: [], zaps: [], puffs: [], puffT: 0,
     danger: false, dangerN: BB.dangerN || 0, dangerTxt: '', say: '', sayT: 0, beep: 0, fastOn: false,
     bot: null, botT: 0.6, confetti: [],
-    u1: f1 - m0, df, wild: 0, zoom: BB.zoom || 1, camX: BB.camX || 0, camY: BB.camY || 0, skid: 0,
   });
   if (!card) { BB.say = LINES_BB.retry[(BB.fails - 1 + LINES_BB.retry.length) % LINES_BB.retry.length]; BB.sayT = 2.2; }
   // the first tray always holds the domino that finishes the bottom row, so the first blast comes quickly
@@ -170,9 +155,8 @@ function bbReset(fails, card) {
 }
 function bbDeal() {
   let hand = null;
-  const small = BB.board.filter(Boolean).length >= BB_CROWD;
   for (let k = 0; k < 40; k++) {
-    hand = [bbRandPiece(small), bbRandPiece(small), bbRandPiece(small)];
+    hand = [bbRandPiece(), bbRandPiece(), bbRandPiece()];
     if (hand[0].id !== hand[1].id && bbSolvable(BB.board, hand, { n: 5000 })) break;
   }
   BB.hand = hand; BB.dealT = 0.0001;
@@ -189,8 +173,8 @@ function bbGeo() {
 }
 function bbLayout() {
   const top = BB.g.SB + 26;
-  const cs = Math.floor(clamp(Math.min((H - top - 46) / BB_S, (W - 110) / 15), 40, 72));
-  const bw = cs * BB_S, tw = Math.round(cs * 3.4), dw = Math.round(clamp(bw * 0.62, 170, 240));
+  const cs = Math.floor(clamp(Math.min((H - top - 46) / 8, (W - 120) / 21), 28, 50));
+  const bw = cs * 8, tw = Math.round(cs * 3.4), dw = Math.round(clamp(bw * 0.62, 170, 240));
   const gx = Math.max(16, (W - (dw + 34 + bw + 30 + tw)) / 2);
   Object.assign(BB, { cs, bw, tw, dw, dx: gx, bx: gx + dw + 34, by: top, tx: gx + dw + 34 + bw + 30 });
   BB.slotH = bw / 3;
@@ -212,8 +196,6 @@ function bbSlotPos(i, p) {
   const s = bbSlotScale(p);
   return { x: BB.tx + (BB.tw - p.w * s) / 2, y: BB.by + i * BB.slotH + (BB.slotH - p.h * s) / 2, s };
 }
-// the held piece floats this far above the pointer (a small lift: with 5x5 cells this big, 0.9 of a cell would put the bottom row under the window edge)
-const bbLift = () => Math.min(0.9 * BB.cs, 24);
 const bbMargin = () => (230 * BB_CAR + BB_RC + 2) / BB.g.L;
 const bbNext = () => BB.rb.find(b => !b.gone) || null;
 const bbLeft = () => BB.rb.filter(b => !b.gone).length;
@@ -306,15 +288,12 @@ function bbScene(t) {
     if (b === nb && BB.danger && !BB.crash) fxMark('bang', p.x, p.y - 44, 0.5 + 0.3 * Math.sin(BB.t * 6), 0.7);
   }
   // exhaust puffs and speed lines
-  for (const q of BB.puffs) { ell(q.x, q.y, q.r, q.r * 0.8); ctx.fillStyle = q.dark ? `rgba(120,118,128,${0.75 * (1 - q.t / 0.9)})` : `rgba(240,240,245,${0.7 * (1 - q.t / 0.9)})`; ctx.fill(); }
+  for (const q of BB.puffs) { ell(q.x, q.y, q.r, q.r * 0.8); ctx.fillStyle = `rgba(240,240,245,${0.7 * (1 - q.t / 0.9)})`; ctx.fill(); }
   // the Camry, Nailong at the wheel
   const cp = bbPath(BB.u, 140 * BB_CAR);
   let sqx = 1, sqy = 1, back = 0;
   if (BB.crash) { const k = BB.crash; sqx = 1 - 0.18 * Math.exp(-k * 5) * Math.cos(k * 22); sqy = 1 + 0.14 * Math.exp(-k * 5) * Math.cos(k * 22); back = -Math.min(1, k * 6) * 10 * Math.exp(-k * 2); }
-  // wild driving: the Camry bounces off the road and rocks nose to tail, harder the closer the block (BB.wild)
-  const wl = BB.run && !BB.crash && !BB.fin ? BB.wild : 0, tt = BB.t;
-  const hop = -Math.abs(Math.sin(tt * (6 + 7 * wl))) * (1 + 11 * wl), rock = Math.sin(tt * 5.3) * 0.03 * wl + Math.sin(tt * 12.1) * 0.07 * wl * wl;
-  ctx.save(); ctx.translate(cp.x, cp.y + hop); ctx.rotate(cp.a + rock); ctx.translate(back, 0);
+  ctx.save(); ctx.translate(cp.x, cp.y); ctx.rotate(cp.a); ctx.translate(back, 0);
   if (BB.v > BB_V0 * 1.6 && !BB.crash) { ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 3; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { const o = (BB.t * 300 + i * 40) % 60; ctx.beginPath(); ctx.moveTo(-230 * BB_CAR - 14 - o, -14 - i * 12); ctx.lineTo(-230 * BB_CAR - 44 - o, -14 - i * 12); ctx.stroke(); } ctx.lineCap = 'butt'; }
   ctx.scale(sqx, sqy);
   const scared = BB.danger || BB.crash || BB.stuck;
@@ -336,7 +315,7 @@ function bbScene(t) {
 
 // ---- gameplay ----
 function bbSnap(p, px, py) {
-  const cs = BB.cs, fx = (px - p.w * cs / 2 - BB.bx) / cs, fy = (py - bbLift() - p.h * cs - BB.by) / cs;
+  const cs = BB.cs, fx = (px - p.w * cs / 2 - BB.bx) / cs, fy = (py - 0.9 * cs - p.h * cs - BB.by) / cs;
   let best = null, bd = 0.9;
   for (let r = Math.floor(fy) - 1; r <= Math.floor(fy) + 2; r++) for (let c = Math.floor(fx) - 1; c <= Math.floor(fx) + 2; c++) {
     if (!bbFits(BB.board, p, r, c)) continue;
@@ -403,8 +382,8 @@ function bbPlace(i, r, c) {
 }
 function bbKbSelect(i) {
   const p = BB.hand[i]; if (!p) return false;
-  const k = BB.kbPos || { r: 2, c: 2 };
-  BB.kb = { i, r: clamp(k.r, 0, BB_S - p.h), c: clamp(k.c, 0, BB_S - p.w) };
+  const k = BB.kbPos || { r: 3, c: 3 };
+  BB.kb = { i, r: clamp(k.r, 0, 8 - p.h), c: clamp(k.c, 0, 8 - p.w) };
   return true;
 }
 // no piece fits: in Block Blast that is the end. Here Nailong loses the brakes and floors it into the next block.
@@ -416,35 +395,30 @@ function bbCheckStuck() {
 // ---- the bot (window.AUTO): greedy placement, played through the same drag path as a human ----
 function bbHoles(b) {
   let n = 0;
-  for (let i = 0; i < BB_SS; i++) if (!b[i]) {
-    const r = Math.floor(i / BB_S), c = i % BB_S;
-    const nb = [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].filter(([a, d]) => a >= 0 && a < BB_S && d >= 0 && d < BB_S);
-    if (nb.every(([a, d]) => b[a * BB_S + d])) n++;
+  for (let i = 0; i < 64; i++) if (!b[i]) {
+    const r = i >> 3, c = i & 7;
+    const nb = [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].filter(([a, d]) => a >= 0 && a < 8 && d >= 0 && d < 8);
+    if (nb.every(([a, d]) => b[a * 8 + d])) n++;
   }
   return n;
 }
 function bbBotMove() {
   let best = null, bs = -1e9;
   const live = BB.hand.map((p, i) => p && { p, i }).filter(Boolean);
-  if (BB_BOTSLOP && Math.random() < BB_BOTSLOP) {   // sloppy: any piece, anywhere it fits
-    const all = [];
-    for (const { p, i } of live) for (let r = 0; r <= BB_S - p.h; r++) for (let c = 0; c <= BB_S - p.w; c++) if (bbFits(BB.board, p, r, c)) all.push({ i, r, c });
-    if (all.length) return all[Math.floor(Math.random() * all.length)];
-  }
-  for (const { p, i } of live) for (let r = 0; r <= BB_S - p.h; r++) for (let c = 0; c <= BB_S - p.w; c++) {
+  for (const { p, i } of live) for (let r = 0; r <= 8 - p.h; r++) for (let c = 0; c <= 8 - p.w; c++) {
     if (!bbFits(BB.board, p, r, c)) continue;
     const res = bbApply(BB.board, p, r, c);
     let s = res.lines * 40 - bbHoles(res.b) * 9;
     let contact = 0;
     for (const [pr, pc] of p.cells) for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const a = r + pr + dr, d = c + pc + dc;
-      if (a < 0 || a >= BB_S || d < 0 || d >= BB_S || BB.board[a * BB_S + d]) contact++;
+      if (a < 0 || a > 7 || d < 0 || d > 7 || BB.board[a * 8 + d]) contact++;
     }
     s += contact * 1.2;
     const rest = live.filter(o => o.i !== i).map(o => o.p);
     if (rest.some(o => !bbAnyFit(res.b, o))) s -= 60;
     if (!bbSolvable(res.b, rest, { n: 400 })) s -= 120;
-    let filled = 0; for (let k = 0; k < BB_SS; k++) if (res.b[k]) filled++;
+    let filled = 0; for (let k = 0; k < 64; k++) if (res.b[k]) filled++;
     s -= filled * 0.4;
     if (s > bs) { bs = s; best = { i, r, c }; }
   }
@@ -458,7 +432,7 @@ function bbBotUpdate(dt) {
     BB.botT -= dt; if (BB.botT > 0) return;
     const m = bbBotMove(); if (!m) { BB.botT = 0.3; return; }
     const p = BB.hand[m.i], sp = bbSlotPos(m.i, p), cs = BB.cs;
-    const fx = BB.bx + (m.c + p.w / 2) * cs, fy = BB.by + (m.r + p.h) * cs + bbLift();
+    const fx = BB.bx + (m.c + p.w / 2) * cs, fy = BB.by + (m.r + p.h) * cs + 0.9 * cs;
     BB.bot = { m, t: 0, x0: sp.x + p.w * sp.s / 2, y0: sp.y + p.h * sp.s / 2, x1: fx, y1: fy };
     BB.drag = { i: m.i, x: BB.bot.x0, y: BB.bot.y0, g: 0, sx: sp.x + p.w * sp.s / 2, sy: sp.y + p.h * sp.s, ss: sp.s };
     window.SFX && SFX.play('pop', { p: 1.15 });
@@ -467,7 +441,7 @@ function bbBotUpdate(dt) {
   const b = BB.bot; b.t += dt;
   const u = ease(clamp(b.t / 0.38, 0, 1));
   if (BB.drag) { BB.drag.x = lerp(b.x0, b.x1, u); BB.drag.y = lerp(b.y0, b.y1, u); }
-  if (b.t > 0.46) { bbRelease(); BB.bot = null; BB.botT = BB_BOTGAP * (BB_BOTGAP > 0.5 ? 0.6 + 0.8 * Math.random() : 1); }
+  if (b.t > 0.46) { bbRelease(); BB.bot = null; BB.botT = BB_BOTGAP; }
 }
 
 // ---- update ----
@@ -481,19 +455,19 @@ function bbCar(dt) {
   if (!BB.run) return;
   const G = BB.g, m = bbMargin(), nb = bbNext();
   if (BB.crash) {
-    BB.crash += dt; BB.zoom += ((BB.crash < 0.8 ? 1.3 : 1) - BB.zoom) * Math.min(1, dt * 6);   // the camera punches in on the bonk
+    BB.crash += dt;
     if (BB.crash > BB_CRASH) bbReset(BB.fails + 1, false);
     return;
   }
   if (BB.fin) {
-    BB.fin += dt; BB.v *= Math.pow(0.05, dt); BB.zoom += (1 - BB.zoom) * Math.min(1, dt * 3); BB.wild *= Math.pow(0.05, dt); BB.u += BB.v * dt; BB.wheel += BB.v * G.L * dt / (33 * BB_CAR);
+    BB.fin += dt; BB.v *= Math.pow(0.05, dt); BB.u += BB.v * dt; BB.wheel += BB.v * G.L * dt / (33 * BB_CAR);
     if (BB.fin > 2.4 && !BB.doneCalled) { BB.doneCalled = true; GAMES.blockblast.api.done(); }   // the win jingle comes from main.js
     return;
   }
   BB.runT += dt;
   const ahead = nb ? nb.u - m - BB.u : 9;
   const v0 = bbV0();
-  let vt = v0 * clamp(1 + (ahead - BB_D0 * BB.df) / (BB_D1 * BB.df), 1, 3.2);
+  let vt = v0 * clamp(1 + (ahead - BB_D0) / BB_D1, 1, 3.2);
   if (BB.stuck && nb) vt = BB_V0 * 5;
   BB.v += (vt - BB.v) * Math.min(1, dt * (BB.stuck ? 4 : 1.6));
   BB.u += BB.v * dt;
@@ -510,11 +484,6 @@ function bbCar(dt) {
   if (fast && !BB.fastOn && !BB.danger && BB.sayT <= 0) { BB.say = LINES_BB.fast[BB.dangerN % LINES_BB.fast.length]; BB.sayT = 1.4; }
   if (fast && !BB.fastOn) window.SFX && SFX.play('engine', { p: 1.3, g: 0.7 });   // catching up: the engine revs
   BB.fastOn = fast;
-  // how wild the driving is: always a bit (no licence), more the closer the next block, all out when stuck
-  const near = nb ? clamp(1 - tti / 5, 0, 1) : 0, wt = BB.stuck ? 1 : 0.3 + 0.7 * Math.pow(near, 1.5);
-  BB.wild += (wt - BB.wild) * Math.min(1, dt * 4);
-  BB.zoom += ((BB.stuck ? 1.32 : 1 + 0.28 * near) - BB.zoom) * Math.min(1, dt * 3);
-  if (BB.wild > 0.55) { BB.skid -= dt; if (BB.skid <= 0) { BB.skid = 0.09; const p = bbPath(BB.u, 140 * BB_CAR); BB.puffs.push({ x: p.x - Math.cos(p.a) * 150 * BB_CAR + (Math.random() - 0.5) * 10, y: p.y - 4, r: 6 + Math.random() * 4, t: 0, dark: 1 }); } }
   if (nb && BB.u >= nb.u - m) {   // crash: one life, then the run starts again
     BB.u = nb.u - m; BB.crash = 0.0001; BB.danger = false; BB.stuck = false; nb.wob = 1; BB.drag = null; BB.bot = null; BB.kb = null;
     BB.crashTxt = LINES_BB.crash[BB.fails % LINES_BB.crash.length]; BB.shake = 0.5;
@@ -597,15 +566,13 @@ function bbDashcam(t) {
   ctx.fillStyle = '#3d4a5c'; ctx.fillRect(vx, vy + vh * 0.38, vw, vh);
   ctx.fillStyle = '#59627a'; rr(vx + vw / 2 - 52, vy + vh * 0.22, 104, vh, 26); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.stroke();
   const scared = BB.danger || BB.stuck, s = vh / 205, nx = vx + vw / 2, ny = vy + vh + 30 * s;
-  const wl = BB.run && !BB.crash && !BB.fin ? BB.wild : 0;
-  const shake = (scared ? Math.sin(BB.t * 50) * 3 : 0) + Math.sin(BB.t * 5.3) * 14 * wl, hop = BB.fin ? Math.abs(Math.sin(BB.t * 9)) * 10 : Math.abs(Math.sin(BB.t * (6 + 7 * wl))) * 8 * wl;
-  const rot = BB.crash ? Math.sin(BB.crash * 18) * 0.25 * Math.exp(-BB.crash * 2) : (scared ? Math.sin(BB.t * 30) * 0.05 : Math.sin(BB.t * 2) * 0.03) + Math.sin(BB.t * 5.3) * 0.12 * wl;
+  const shake = scared ? Math.sin(BB.t * 50) * 3 : 0, hop = BB.fin ? Math.abs(Math.sin(BB.t * 9)) * 10 : 0;
+  const rot = BB.crash ? Math.sin(BB.crash * 18) * 0.25 * Math.exp(-BB.crash * 2) : scared ? Math.sin(BB.t * 30) * 0.05 : Math.sin(BB.t * 2) * 0.03;
   nailong(nx + shake, ny - hop, s, { arms: scared || BB.fin || BB.crash ? 'up' : 'down', flail: BB.t * (scared ? 26 : 12), mouth: BB.crash ? 'o' : scared || BB.fin || BB.v > BB_V0 * 1.7 ? 'open' : 'smile', look: BB.crash ? [0, 1] : scared ? [0.2, -0.8] : [0, -0.2], rot });
   // the steering wheel in front of his belly
   const wy = ny - 66 * s;
   ctx.strokeStyle = '#17181d'; ctx.lineWidth = 10 * s; ell(nx + shake, wy, 46 * s, 40 * s); ctx.stroke();
-  const yank = Math.sin(BB.t * (4 + 10 * wl)) * (0.15 + 0.9 * wl), ya = Math.cos(yank), yb = Math.sin(yank);   // he yanks the wheel side to side
-  ctx.lineWidth = 7 * s; ctx.beginPath(); ctx.moveTo(nx + shake - 44 * s * ya, wy - 40 * s * yb); ctx.lineTo(nx + shake + 44 * s * ya, wy + 40 * s * yb); ctx.moveTo(nx + shake, wy); ctx.lineTo(nx + shake - 38 * s * yb, wy + 38 * s * ya); ctx.stroke();
+  ctx.lineWidth = 7 * s; ctx.beginPath(); ctx.moveTo(nx + shake - 44 * s, wy); ctx.lineTo(nx + shake + 44 * s, wy); ctx.moveTo(nx + shake, wy); ctx.lineTo(nx + shake, wy + 38 * s); ctx.stroke();
   ell(nx + shake, wy, 11 * s, 11 * s); ctx.fillStyle = '#2a2b31'; ctx.fill();
   if (scared) fxMark('sweat', nx + 58 * s, ny - 180 * s, (BB.t * 1.4) % 1, 0.8);
   if (BB.crash) for (let i = 0; i < 3; i++) { const a = BB.crash * 6 + i * 2.09; ell(nx + Math.cos(a) * 60 * s, ny - 190 * s + Math.sin(a) * 14 * s, 7, 7); ctx.fillStyle = '#ffe14d'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.line; ctx.stroke(); }
@@ -639,7 +606,7 @@ function bbCardDraw() {
   ctx.save(); ctx.translate(W / 2, H * 0.15); ctx.scale(s0, s0); title(LINES_BB.cardTitle, 0, 0, 72); ctx.restore();
   // the picture: a full row of the grid -> a roadblock flies off the bridge
   const cy = H * 0.34, s = 34, rx = W / 2 - 330;
-  for (let c = 0; c < BB_S; c++) bbBlock(rx + 34 + c * s, cy - s / 2, s, BB_COLS[[3, 0, 4, 1, 5, 2][c]], 1, 1, 0.15 + 0.12 * Math.sin(BB.t * 8));
+  for (let c = 0; c < 6; c++) bbBlock(rx + c * s, cy - s / 2, s, BB_COLS[[3, 0, 4, 1, 5, 2][c]], 1, 1, 0.15 + 0.12 * Math.sin(BB.t * 8));
   ctx.fillStyle = C.y; ctx.strokeStyle = C.line; ctx.lineWidth = 5; ctx.lineJoin = 'round';
   const ax = W / 2 - 92; ctx.beginPath(); ctx.moveTo(ax, cy - 10); ctx.lineTo(ax + 60, cy - 10); ctx.lineTo(ax + 60, cy - 26); ctx.lineTo(ax + 96, cy); ctx.lineTo(ax + 60, cy + 26); ctx.lineTo(ax + 60, cy + 10); ctx.lineTo(ax, cy + 10); ctx.closePath(); ctx.fill(); ctx.stroke();
   const fy = cy - 14 + Math.sin(BB.t * 3) * 8;
@@ -665,15 +632,7 @@ function bbDraw(t, dt) {
   bbUpdate(dt);
   ctx.save();
   if (BB.shake > 0 && !(BB.freeze > 0)) { sky(); ctx.fillStyle = '#4fa9e0'; ctx.fillRect(0, BB.g.HZ, W, H); ctx.translate(...fxShake(BB.shake * 2, 7)); }   // sky and lake under the shake, so its edges never flash the page colour
-  // the camera pushes in on the car and the block ahead as it gets close (BB.zoom), centred between the two
-  { const nb = bbNext(), cp = bbRoad(BB.u), fp = nb ? bbRoad(nb.u) : cp, tx = (cp[0] + fp[0]) / 2, ty = Math.min(cp[1], fp[1]) - 40;
-    if (!BB.camX) { BB.camX = tx; BB.camY = ty; }
-    const k = Math.min(1, dt * 4); BB.camX += (tx - BB.camX) * k; BB.camY += (ty - BB.camY) * k; }
-  const zc = BB.zoom || 1;
-  ctx.save();
-  if (zc > 1.001) { ctx.translate(BB.camX, BB.camY); ctx.scale(zc, zc); ctx.translate(-BB.camX, -BB.camY); }
   bbScene(BB.t);
-  ctx.restore();
   const { cs, bx, by, bw } = BB;
   // board panel
   ctx.fillStyle = 'rgba(0,0,0,.28)'; rr(bx - 4, by + 8, bw + 8, bw + 8, 22); ctx.fill();
@@ -688,10 +647,10 @@ function bbDraw(t, dt) {
     ghost = { p, r: BB.kb.r, c: BB.kb.c, bad: !ok, kb: true };
     if (ok) { const res = bbApply(BB.board, p, BB.kb.r, BB.kb.c); if (res.lines) hot = { rows: res.rows, cols: res.cols, col: p.col }; }
   }
-  for (let r = 0; r < BB_S; r++) for (let c = 0; c < BB_S; c++) {
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const x = bx + c * cs, y = by + r * cs;
     rr(x + 2, y + 2, cs - 4, cs - 4, cs * 0.18); ctx.fillStyle = (r + c) % 2 ? '#3a2f78' : '#352b70'; ctx.fill();
-    const v = BB.board[r * BB_S + c];
+    const v = BB.board[r * 8 + c];
     if (v) {
       const k = r + ',' + c, pp = BB.pop[k];
       const pop = pp !== undefined ? 1 + 0.22 * Math.sin(clamp(pp / 0.2, 0, 1) * Math.PI) : 1;
@@ -702,7 +661,7 @@ function bbDraw(t, dt) {
   }
   if (hot) {   // empty cells of the lines that would clear glow too
     ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = BB_COLS[hot.col - 1];
-    for (let r = 0; r < BB_S; r++) for (let c = 0; c < BB_S; c++) if (!BB.board[r * BB_S + c] && (hot.rows.includes(r) || hot.cols.includes(c))) { rr(bx + c * cs + 2, by + r * cs + 2, cs - 4, cs - 4, cs * 0.18); ctx.fill(); }
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (!BB.board[r * 8 + c] && (hot.rows.includes(r) || hot.cols.includes(c))) { rr(bx + c * cs + 2, by + r * cs + 2, cs - 4, cs - 4, cs * 0.18); ctx.fill(); }
     ctx.restore();
   }
   if (ghost) for (const [pr, pc] of ghost.p.cells) {
@@ -735,7 +694,7 @@ function bbDraw(t, dt) {
   bbDashcam(BB.t);
   // zaps: a string of sparks from the cleared line up to the roadblock it blasts
   for (const z of BB.zaps) {
-    const p = bbPath(z.b.u, BB_RC), zc2 = BB.zoom || 1, tx = BB.camX + (p.x - BB.camX) * zc2, ty = BB.camY + (p.y - 20 - BB.camY) * zc2, mx = (z.x + tx) / 2 + 80, my = Math.min(z.y, ty) - 60, k = clamp(z.t / BB_ZAP, 0, 1), fade = 1 - clamp((z.t - BB_ZAP) / 0.15, 0, 1);
+    const p = bbPath(z.b.u, BB_RC), tx = p.x, ty = p.y - 20, mx = (z.x + tx) / 2 + 80, my = Math.min(z.y, ty) - 60, k = clamp(z.t / BB_ZAP, 0, 1), fade = 1 - clamp((z.t - BB_ZAP) / 0.15, 0, 1);
     for (let i = 0; i <= 8; i++) {
       const u = (i / 8) * k, x = (1 - u) * (1 - u) * z.x + 2 * u * (1 - u) * mx + u * u * tx, y = (1 - u) * (1 - u) * z.y + 2 * u * (1 - u) * my + u * u * ty;
       ctx.save(); ctx.globalAlpha = fade * (0.45 + 0.55 * i / 8); ell(x, y, 6 + i * 1.3, 6 + i * 1.3); ctx.fillStyle = '#fff6a0'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.line; ctx.stroke(); ctx.restore();
@@ -744,14 +703,14 @@ function bbDraw(t, dt) {
   if (BB.ret) {
     const R = BB.ret, p = BB.hand[R.i]; if (p) {
       const sp = bbSlotPos(R.i, p), u = ease(clamp(R.t, 0, 1));
-      const s0 = lerp(R.ss, cs, ease(R.g)), ax = lerp(R.x, sp.x + p.w * sp.s / 2, u), ay = lerp(R.y - bbLift(), sp.y + p.h * sp.s, u), s = lerp(s0, sp.s, u);
+      const s0 = lerp(R.ss, cs, ease(R.g)), ax = lerp(R.x, sp.x + p.w * sp.s / 2, u), ay = lerp(R.y - 0.9 * cs, sp.y + p.h * sp.s, u), s = lerp(s0, sp.s, u);
       bbPiece(p, ax - p.w * s / 2, ay - p.h * s, s);
     }
   }
   if (BB.drag) {
     // grab pop: swells about 15% past board size, settles on it exactly 0.2 s after the pick-up (jelly)
     const D = BB.drag, p = BB.hand[D.i], u = ease(D.g), s = lerp(D.ss, cs, u) * (1 + 0.16 * Math.sin(clamp((D.a || 0) / 0.2, 0, 1) * Math.PI));
-    const tax = D.x, tay = D.y - bbLift(), ax = lerp(D.sx, tax, u), ay = lerp(D.sy, tay, u);
+    const tax = D.x, tay = D.y - 0.9 * cs, ax = lerp(D.sx, tax, u), ay = lerp(D.sy, tay, u);
     ctx.save(); ctx.globalAlpha = 0.28; for (const [pr, pc] of p.cells) { rr(ax - p.w * s / 2 + pc * s + 8, ay - p.h * s + pr * s + 14, s, s, s * .22); ctx.fillStyle = '#000'; ctx.fill(); } ctx.restore();
     bbPiece(p, ax - p.w * s / 2, ay - p.h * s, s);
   }
@@ -762,12 +721,6 @@ function bbDraw(t, dt) {
   if (BB.fin) {
     for (const c of BB.confetti) { ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rot); rr(-c.s / 2, -c.s / 2, c.s, c.s, c.s * .3); ctx.fillStyle = c.col; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.line; ctx.stroke(); ctx.restore(); }
     ctx.save(); ctx.translate(BB.bx + BB.bw / 2, BB.by + BB.bw * 0.42); const q = fxBack(BB.fin / 0.3); ctx.scale(q, q); title(LINES_BB.winTitle, 0, 0, Math.min(84, BB.bw / 4.6)); ctx.restore();
-  }
-  if ((BB.danger || BB.stuck) && !BB.crash && !BB.fin) {   // the screen edges pulse red while the car is about to hit
-    const a = (0.2 + 0.16 * Math.sin(BB.t * 14)) * (BB.stuck ? 1.2 : 0.6 + 0.4 * BB.wild);
-    const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.42, W / 2, H / 2, Math.hypot(W, H) * 0.56);
-    g.addColorStop(0, 'rgba(255,30,40,0)'); g.addColorStop(1, `rgba(255,30,40,${a})`);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   }
   if (BB.card > 0) bbCardDraw();
 }
@@ -796,7 +749,7 @@ GAMES.blockblast = {
     }
     if (!BB.kb) { const i = BB.hand.findIndex(Boolean); if (i < 0 || !bbKbSelect(i)) return; if (arrow) return; }
     const kb = BB.kb, p = BB.hand[kb.i];
-    if (arrow) { kb.r = clamp(kb.r + arrow[0], 0, BB_S - p.h); kb.c = clamp(kb.c + arrow[1], 0, BB_S - p.w); BB.kbPos = { r: kb.r, c: kb.c }; window.SFX && SFX.play('tick', { g: 0.5 }); return; }
+    if (arrow) { kb.r = clamp(kb.r + arrow[0], 0, 8 - p.h); kb.c = clamp(kb.c + arrow[1], 0, 8 - p.w); BB.kbPos = { r: kb.r, c: kb.c }; window.SFX && SFX.play('tick', { g: 0.5 }); return; }
     if (BB.dealT > 0 && BB.dealT < 0.4) return;
     if (bbFits(BB.board, p, kb.r, kb.c)) { const { i, r, c } = kb; BB.kb = null; BB.kbPos = { r, c }; bbPlace(i, r, c); }
     else { BB.kbBad = 0.25; BB.shake = Math.max(BB.shake, 0.12); window.SFX && SFX.play('tick', { p: 0.5 }); }

@@ -6,12 +6,12 @@
 
 // TODO Max sets these after playing: his real time in seconds for each game. These are placeholders.
 const MAX_SCORES = {   // Max, 13 Oct: "if you end with 0 it looks fake ... round them to be a bit random"
-  octagon: 63.7,     // SECONDS (1:04.0), lower is better: a clean run with no bonks is about 61.6 s, so this is a good run with a few bonks and no falls. TODO Max sets this after playing
+  octagon: 62.1,   // Max's perfect run (the new climax made a perfect run 62.1 s, was 61.6)     // SECONDS (1:04.0), lower is better: a clean run with no bonks is about 61.6 s, so this is a good run with a few bonks and no falls. TODO Max sets this after playing
   tetris: 37.4,      // Max, 13 Oct: "give a really decent tetris score and ping pong score but they both have to be beatable with good precision" (the perfect bot does 13.7 s)
   bottlesort: 85.9,  // Max's real time (13 Oct)
   battle: 68.3,      // a good human run (the perfect bot does about 50 s)
   pingpong: 87.6,    // Max won 11-0 (time not taken); the perfect bot's 11-0 takes about 79 s, so 1:30 needs a near-perfect match
-  runner: 96.9,      // SECONDS (1:38.0), lower is better: a clean run is about 1:44 on the clock before bao zi (each takes 1 s off), so this is a clean run that ate about six. TODO Max sets this after playing
+  runner: 101.9,      // SECONDS (1:38.0), lower is better: a clean run is about 1:44 on the clock before bao zi (each takes 1 s off), so this is a clean run that ate about six. TODO Max sets this after playing
   blockblast: 34.2,  // a good human run on the 5x5 finale (the perfect bot does 24 s, a decent first-timer about 42 s)
 };
 // games scored by a number they pass to api.done (higher is better) instead of seconds, and the unit it is shown in
@@ -24,6 +24,8 @@ const MENU_OWN_TIME = {octagon: true, runner: true};
 const LINES_MENU = {
   title: 'PLAY IT AGAIN',                         // TODO joke
   sub: "beat Max: faster times, bigger scores",     // TODO joke
+  // her full run, beside the line above (Max, 13 Oct): the time from the lives card to this menu, and the hearts she had left
+  runLabel: 'Your full run:', hearts: ['no hearts left', '1 heart left', '2 hearts left', '3 hearts left'],
   yours: 'YOUR BEST',
   none: 'not played yet',
   maxLabel1: "MAX'S", maxLabel2: 'HIGH SCORE',
@@ -159,6 +161,8 @@ const MENU = {
   },
 
   enter(api, res) {
+    this.run = (window.RIDE && RIDE.run) || null;
+    if (!this.run) try { this.run = JSON.parse(localStorage.getItem('nailong.run') || 'null'); } catch (e) {}
     this.api = api;
     const q = new URLSearchParams(location.search);
     if (!this.booted) {
@@ -281,7 +285,16 @@ const MENU = {
   header(c) {
     const mx = Math.max(36, W * 0.04);
     title(LINES_MENU.title, W / 2, 50, 58);
-    font(24, 600); ctx.fillStyle = '#f3e9c6'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINES_MENU.sub, W / 2, 98);
+    const run = this.run && isFinite(this.run.secs) ? this.run : null;
+    if (!run) { font(24, 600); ctx.fillStyle = '#f3e9c6'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINES_MENU.sub, W / 2, 98); }
+    else {   // "Your full run: 11:23.4, 2 hearts left   ·   beat Max: ..." in one line between the two jumping Nailongs
+      const a = LINES_MENU.runLabel + ' ' + menuFmt(run.secs) + ', ' + LINES_MENU.hearts[clamp(run.hearts | 0, 0, 3)], sep = '   ·   ', b = LINES_MENU.sub;
+      let fs = 24; const room = W - 2 * (mx + 130);
+      font(fs, 600); while (ctx.measureText(a + sep + b).width > room && fs > 15) font(--fs, 600);
+      const wa = ctx.measureText(a).width, ws = ctx.measureText(sep).width, x0 = W / 2 - (wa + ws + ctx.measureText(b).width) / 2;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffd21f'; ctx.fillText(a, x0, 98); ctx.fillStyle = '#f3e9c6'; ctx.fillText(sep + b, x0 + wa, 98);
+    }
     for (const side of [-1, 1]) {   // two Nailongs jumping in turns
       const ph = c * 5 + (side > 0 ? Math.PI : 0), jump = Math.abs(Math.sin(ph)), air = jump > .08;
       ctx.save(); ctx.translate(side < 0 ? mx + 70 : W - mx - 70, 124 - jump * 30); ctx.scale(side, 1);

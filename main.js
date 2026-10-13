@@ -12,6 +12,8 @@ const LINES_MAIN = {
   // "I wouldn't actually do that to you" skip the bruh, pause.. "keep going""
   faceNope: "I wouldn't actually do that to you.",
   faceGo: 'Keep going.',
+  // replays from the end menu (Max, 13 Oct: "there's a restart and an exit button, and then the timer resets on a full death")
+  replayRestart: 'Restart', replayExit: 'Exit',
   // name tags (Max, 13 Oct 10:50): "I need labels showing that it's scarlett, so when there's a character after .3s a line with a
   // nametag appears for one second before fading". Once per ride, the first story clip each one is on screen in. Max is not
   // tagged (he introduces himself). Keys are the names the drawing code uses; the values are what she reads.
@@ -367,7 +369,7 @@ function noteFell(){
 }
 function endOver(){
   const d = performance.now() - over.at;
-  t0 += d; gameT0 += d/1000; last = performance.now();   // the frozen stretch never counts: the game's clock and her time resume where they were
+  t0 += d; gameT0 += d/1000; last = performance.now(); if (RIDE.runT0 != null) RIDE.runT0 += d/1000;   // the frozen stretch never counts: the game's clock and her time resume where they were
   over = null;
   const g = curGame(); hintEl.textContent = g ? keyHint(g.hint || '') : '';
 }
@@ -422,7 +424,7 @@ function startGame(id, onDone){
   const g = GAMES[id], tok = ++gameTok; gameT0 = nowS();
   g.enter({
     done: score => { if (tok !== gameTok || over) return; gameTok++; window.SFX && SFX.play('jingle'); onDone(nowS() - gameT0, typeof score === 'number' ? score : undefined); },   // 3-note win stinger (sfx.js)
-    died: () => { if (tok !== gameTok || !livesOn()) return; loseLife(); },
+    died: () => { if (tok !== gameTok) return; if (replay) { replayDied(tok); return; } if (!livesOn()) return; loseLife(); },
     replay: !!replay,   // true when she replays it from the end menu: games skip their instruction card and dialogue
   });
   hintEl.textContent = keyHint(g.hint || '');
@@ -477,14 +479,25 @@ function drawSub(){
 }
 const menuApi = {
   play(id){ if (!GAMES[id]) return; replay = id; startGame(id, (secs, score) => { replay = null; showMenu(MENU.record(id, secs, score)); }); },
-  story(){ RIDE.lives = LIVES; RIDE.failed = false; steps = FLOW; replay = null; go(RIDE_START); },
+  story(){ RIDE.lives = LIVES; RIDE.failed = false; RIDE.runT0 = null; steps = FLOW; replay = null; go(RIDE_START); },
 };
 function showMenu(res){ MENU.enter(menuApi, res); hintEl.textContent = MENU.hint; }
-function exitReplay(){ gameTok++; replay = null; showMenu(); }   // Esc or Skip during a replay: back to the menu, no time recorded
+function exitReplay(){ gameTok++; replay = null; showMenu(); }   // Esc, Skip or the Exit button during a replay: back to the menu, no time recorded
+// a replay starts over from scratch (a fresh game and a fresh timer): the Restart button, or a death in it (the time resets on a
+// full death, after a beat so she sees what happened)
+function restartReplay(){ const id = replay; if (id) menuApi.play(id); }
+function replayDied(tok){ setTimeout(() => { if (tok === gameTok && replay) restartReplay(); }, 1200); }
+const rbtn = (id, label, fn) => { const b = document.createElement('button'); b.id = id; b.textContent = label; b.hidden = true;
+  b.onclick = e => { e.currentTarget.blur(); fn(); }; const ui = document.getElementById('ui'); ui.insertBefore(b, ui.firstChild); return b; };
+const replayBtns = [rbtn('exitBtn', LINES_MAIN.replayExit, () => { if (replay) exitReplay(); }), rbtn('restartBtn', LINES_MAIN.replayRestart, restartReplay)];
 function go(i){
   gameTok++; goN++; replay = null; over = null; cuts = []; pops = []; sub = null; hintEl.style.opacity = '';
   si = ((i % steps.length) + steps.length) % steps.length; t0 = performance.now();
   const st = cur(), mySi = si;
+  // the full run (Max, 13 Oct: "the full run is recorded with how many hearts and how much time it took for the full runthrough,
+  // and you get a time even if you died"): from the lives card to the end menu, without the out-of-lives freeze or a hidden tab
+  if (steps === FLOW && st.lives && RIDE.runT0 == null) RIDE.runT0 = nowS();
+  if (steps === FLOW && st.menu && RIDE.runT0 != null) { recordRun(nowS() - RIDE.runT0); RIDE.runT0 = null; }
   if (st.menu) { showMenu(); return; }
   if (st.lives) { livesPopped = 0; hintEl.textContent = ''; return; }
   if (st.intro) { const myGo = goN; hintEl.textContent = ''; INTRO.start(() => { if (goN === myGo) go(mySi + 1); }); return; }
@@ -493,8 +506,14 @@ function go(i){
   hintEl.textContent = st.end ? (TOUCH ? LINES_MAIN.againTouch : LINES_MAIN.again) : '';   // Max, 13 Oct: "no cut scenes can be skipped"
 }
 function next(){ go(cur().end ? 0 : si + 1); }
+function recordRun(secs){
+  RIDE.run = {secs: Math.round(secs*10)/10, hearts: Math.max(0, RIDE.lives)};
+  if (STORE_OK) try { localStorage.setItem('nailong.run', JSON.stringify(RIDE.run)); } catch (e) {}
+}
 // story clips play at 70% speed (Max, 12 Oct: "too fast paced animations, slow it down 30%"); games keep their own pace
 const SCENE_SPEED = 0.7;
+const MENU_FADE = 10;   // the end menu fades in from navy over this many seconds the first time (not after a replay)
+let menuFading = false;
 const isClip = () => !curGame() && !!cur().scene;
 function draw(t, dt){
   const real = t;
@@ -505,6 +524,10 @@ function draw(t, dt){
   TAGS.on = isClip(); TAGS.frame = {};
   if (g) g.draw(t, dt); else if (cur().lives) drawLivesCard(t); else if (cur().scene) cur().scene(t, dt);
   if (TAGS.on) drawTags(real);
+  if (g === MENU && !replay && t < MENU_FADE) {   // Max, 13 Oct: "make the play it again fade in over ten seconds slowly"
+    ctx.save(); ctx.setTransform(S, 0, 0, S, 0, 0); ctx.fillStyle = `rgba(29,22,64,${1 - t/MENU_FADE})`; ctx.fillRect(0, 0, W, H); ctx.restore();
+    hintEl.style.opacity = String(t/MENU_FADE); menuFading = true;
+  } else if (menuFading) { menuFading = false; hintEl.style.opacity = ''; }
   TAGS.on = false;
 }
 
@@ -556,6 +579,7 @@ function frame(now){
   const dt = HOLD ? 0 : clamp((now - last)/1000, 0, 0.05); last = now;   // never negative: the first rAF timestamp can precede last
   ctx.setTransform(S, 0, 0, S, 0, 0); ctx.clearRect(0, 0, W, H);
   const t = HOLD ? sim : (now - t0)/1000, s0 = goN;
+  for (const b of replayBtns) if (b.hidden !== !replay) b.hidden = !replay;   // Restart and Exit only while she replays a game from the menu
   draw(t, dt);
   if (goN === s0) {   // the ride's hearts (and the shutter) sit over whatever game is running
     ctx.setTransform(S, 0, 0, S, 0, 0);
@@ -611,7 +635,7 @@ setInterval(() => { if (crayon) document.getElementById('turb').setAttribute('se
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) hiddenAt = performance.now();
-  else if (hiddenAt) { const d = performance.now() - hiddenAt; t0 += d; last = performance.now(); gameT0 += d/1000; if (over) over.at += d; hiddenAt = 0; }
+  else if (hiddenAt) { const d = performance.now() - hiddenAt; t0 += d; last = performance.now(); gameT0 += d/1000; if (RIDE.runT0 != null) RIDE.runT0 += d/1000; if (over) over.at += d; hiddenAt = 0; }
 });
 
 // the browser tab icon: Nailong's face, drawn here like everything else

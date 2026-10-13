@@ -41,6 +41,7 @@ const DR_SFX = [
   [DR.drift + 3.15, 'swish', {p: 0.55, g: 0.2}],                                                                // passes its lowest point
   [DR.leaf, 'tick', {p: 1.7, g: 0.3}],                                                                         // the gum leaf snaps off
   [DR.doorA, 'tick', {p: 0.8, g: 0.5}], [DR.doorA + 0.05, 'swish', {p: 0.5, g: 0.3}],                          // the car door opens for him
+  [DR.over + 0.05, 'whoosh', {p: 1.3, g: 0.6}], [DR.over + 0.35, 'whoosh', {p: 1.5, g: 0.5}],      // the two spins in
   [DR.land, 'squeak', {p: 0.8, g: 0.6}], [DR.land + 0.02, 'thud', {p: 1.2, g: 0.5}],                           // plop into the seat
   [DR.shutB - 0.22, 'door', {}],                                                                               // creak, and it shuts
 ];
@@ -210,8 +211,10 @@ function drPose(g, t) {
     return {x, y, s: 0.5, lid: 0.55, o: {rot: -0.3 * sw * (1 - 0.5 * u), arms: 'down', mouth: 'smile', look}};
   }
   const v = P(t, DR.over, DR.land), e = ease(v), sw = Math.sin(v * Math.PI);
-  return {x: seatX - 20 * (1 - v) * sw, y: lerp(g.hoverY, seatY, e), s: lerp(0.5, 0.34, e), lid: 0.55,
-    o: {rot: 0.12 * (1 - v) * sw, arms: 'down', mouth: 'smile', look: [0.4, 0.8]}};
+  // Max, 13 Oct: "when nai long is jumping into the car he should do some 360 degree rotations": two full spins about his middle on the way in
+  const fx = seatX - 20 * (1 - v) * sw, fy = lerp(g.hoverY, seatY, e), s = lerp(0.5, 0.34, e), th = Math.PI * 4 * (1 - Math.pow(1 - v, 2.2)), h = 95 * s;
+  return {x: fx - h * Math.sin(th), y: fy - h + h * Math.cos(th), s, lid: v > 0.85 ? 0.55 : 0,
+    o: {rot: th, arms: v < 0.85 ? 'up' : 'down', flail: t * 16, mouth: v < 0.85 ? 'open' : 'smile', look: [0.4, 0.8]}};
 }
 // the gum leaf that snaps off the tree and overtakes him on the way down (null before it falls)
 function drLeaf(g, t) {

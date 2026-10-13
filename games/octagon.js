@@ -21,6 +21,7 @@ const LINES_OCTAGON = {
   start: 'press any key to start',
   again: 'Again.',                          // short beat after a fall
   fails: ['Nailong fell. Again.', 'Whoops. Again.', 'Wheee. No. Again.', 'Almost. Again.', 'Gravity, rude. Again.'],
+  checkpoint: 'CHECKPOINT!',               // pops up the first time she passes the checkpoint before the mirror; a fall after it starts her there
   bonk: 'BONK!',                            // when he runs into a textbook lying on the path
   win: '100%!',
   winBubble: 'I did it!',
@@ -50,7 +51,7 @@ const ogRnd = i => { const x = Math.sin(i*91.7 + 47.3)*43758.5453; return x - Ma
 // the flip ladder; the mirror; book rain; the speed ramp; the last sprint with him right behind.
 function ogTrack(){
   const rows = [], moves = [], bonks = [], throws = [], spd = [], sides = [], shouts = [];
-  let p = 0;
+  let p = 0, cp = null;
   const n = () => rows.length;
   const put = (faces, kind = 0) => { const s = Array(8).fill(false), k = Array(8).fill(0);
     for (const f of faces) { const m = ogM8(f); s[m] = true; k[m] = typeof kind === 'function' ? kind(f) : kind; }
@@ -64,7 +65,8 @@ function ogTrack(){
   const S = (v, snap) => spd.push({row: n(), v, snap: !!snap});
   const BK = (row, face, w = 'y') => bonks.push({row, face: ogM8(face), hit: -1, w});   // a textbook lying on face `face` of a row
   const X = (row, face, o = {}) => throws.push({row, face: ogM8(face), len: o.len || 1, show: o.show || OG_SHOW, hit: o.hit || OG_HIT, w: o.w || (throws.length % 2 ? 'r' : 'y')});
-  const MISS = () => throws.push({row: n() + 6, face: null, len: 1, show: OG_SHOW, hit: OG_HIT, w: throws.length % 2 ? 'r' : 'y', ang: -Math.PI/2 + (ogRnd(n()) - 0.5)*1.6});
+  const MISS = r => throws.push({row: r === undefined ? n() + 6 : r, face: null, len: 1, show: OG_SHOW, hit: OG_HIT, w: throws.length % 2 ? 'r' : 'y', ang: -Math.PI/2 + (ogRnd(r === undefined ? n() : r) - 0.5)*1.6});
+  const ring = (r, keep, o = {}) => { for (let f = 0; f < 8; f++) if (!keep.some(k => ogM8(k - f) === 0)) X(r, f, {show: 11, ...o}); };   // a book into every panel of row r but the ones kept
   const SIDE = side => sides.push({row: n(), side});
   const SAY = (text, big) => shouts.push({row: n(), text, big: !!big});
 
@@ -100,15 +102,19 @@ function ogTrack(){
   G(3); SIDE(1); G(2);
   // 5. the flip ladder: floor, ceiling, floor, ceiling, quicker each time
   S(4.1); MISS();
-  F(3); G(2); F(3); G(2); MISS(); F(3); G(1); F(3); G(3);
+  F(3); G(2); F(3); G(2); MISS(); F(3); G(1); F(3);
+  //    the checkpoint (Max, 13 Oct: "checkpoint halfway in the octagon game before the path splits into two"): a chequered line on the
+  //    plain rows after the ladder. Once she has crossed it, a fall puts her back on it instead of at the start
+  cp = {row: n(), p}; G(3);
   // 6. the mirror: the path splits both ways round the tube and meets again on the ceiling. He has already aimed at the left branch.
-  S(4.2); G(2);
+  //    (two plain rows moved here from after the mirror, so a respawn on the checkpoint has a moment before the split)
+  S(4.2); G(4);
   { const c = p, a = n();
     rowsOf(2, [c - 1, c, c + 1]); rowsOf(1, [c - 1, c + 1]); rowsOf(2, [c - 2, c - 1, c + 1, c + 2]); rowsOf(1, [c - 2, c + 2]);
     rowsOf(2, [c - 3, c - 2, c + 2, c + 3]); rowsOf(1, [c - 3, c + 3]); rowsOf(2, [c - 3, c + 3, c + 4]);
     X(a + 5, c + 2, {show: 15, w: 'r'});
     mv(-1, a, a + 2); mv(-1, a + 3, a + 5); mv(-1, a + 6, a + 8); mv(-1, a + 9, a + 11); }
-  G(5);
+  G(3);
   // 7. book rain: whole tube (he punches the ceiling), a five-wide chute he punches into a weave, then three-wide, then one
   S(4.4);
   { const c = p, a = n(); R(3); X(a + 1, c + 4); X(a + 2, c + 3); X(a + 2, c + 5, {len: 1});
@@ -126,23 +132,46 @@ function ogTrack(){
   // 8. the speed ramp: yellow chevrons (and Mr Shou catches up), then quick stairs at the new speed
   S(5.1, true); SIDE(0); SAY(LINES_OCTAGON.cooked, true); G(4, [0], 4);
   T(1, 2); G(1); T(1, 2); G(1); T(-1, 2); G(1); T(-1, 2); G(2);
-  // 9. the last sprint: Mr Shou right behind, books flying over Nailong's head into the walls
+  // 9. the last sprint (Max, 13 Oct: "we need a better climax to finish the octagon game with mr. shou throwing a lot of stuff ... don't
+  //    increase the length just make it a diffucult and impressive ending"): Mr Shou right behind, throwing everything he has. Every
+  //    target shows early (walls from 11 deep) and every dodge leaves about two thirds of a second at this speed.
   S(5.4);
-  { const a = n(), c = p; R(4); X(a + 2, c + 2, {len: 2}); X(a + 3, c - 3); X(a + 3, c + 4, {len: 1}); }
-  G(2); F(3); G(2); SAY(LINES_OCTAGON.shout, true);
-  for (let i = 0; i < 4; i++) { T(-1, 3); G(i === 3 ? 2 : 1); }
-  { const c = p, a = n(); rowsOf(7, [c - 1, c, c + 1]); X(a + 4, c, {len: 2}); X(a + 4, c + 1, {len: 2}); mv(-1, a + 1, a + 4); }
-  G(2); F(3); G(2); SAY(LINES_OCTAGON.shout, true); T(1, 3); G(1); T(1, 3); G(4); R(10);
-  return {rows, moves, bonks, throws, spd, sides, shouts, finPos: (rows.length - 6)*OG_LEN};
+  { const a = n(), c = p; SAY(LINES_OCTAGON.shout, true); MISS(a + 6); MISS(a + 11); MISS(a + 21); R(34);
+    //    the opening barrage: books slam into the walls and the ceiling all round her
+    X(a + 2, c + 2); X(a + 3, c - 2); X(a + 3, c + 4, {len: 2}); X(a + 4, c + 3); X(a + 5, c - 3);
+    //    four walls of books: he punches the whole ring but one panel, so she reads the gap and rolls to it
+    ring(a + 9, [c + 1]); mv(1, a + 5, a + 9);
+    ring(a + 14, [c]); mv(-1, a + 10, a + 14);
+    ring(a + 19, [c - 1]); mv(-1, a + 15, a + 19);
+    ring(a + 24, [c]); mv(1, a + 20, a + 24);
+    //    then he punches out everything but the ceiling, three rows deep: flip!
+    ring(a + 29, [c + 4], {len: 3}); moves.push({a: a + 25, b: a + 29, d: 4, flip: true, to: ogM8(p + 4)}); p += 4; }
+  //    a three-wide chute he punches into a weave, two panels at a time
+  SAY(LINES_OCTAGON.shout, true);
+  { const c = p, b = n(); rowsOf(15, [c - 1, c, c + 1]); MISS(b + 5); MISS(b + 10);
+    X(b + 3, c); X(b + 3, c + 1); mv(-1, b, b + 3);
+    X(b + 8, c - 1); X(b + 8, c + 1); mv(1, b + 4, b + 8);
+    X(b + 13, c - 1); X(b + 13, c); mv(1, b + 9, b + 13); }
+  G(4);
+  //    and a last volley as she reaches the finish ring: every panel round her bursts but hers and the two beside it
+  { const a = n(); MISS(a + 1); MISS(a + 3); R(10); ring(a + 2, [p - 1, p, p + 1], {show: 12}); }
+  return {rows, moves, bonks, throws, spd, sides, shouts, cp, finPos: (rows.length - 6)*OG_LEN};
 }
 function ogReset(again = false){
   const deaths = OG.deaths + (again ? 1 : 0), tr = ogTrack();
   Object.assign(OG, {rows: tr.rows, moves: tr.moves, bonks: tr.bonks, throws: tr.throws.map((th, i) => ({...th, i, done: false, rel: false})),
-    spd: tr.spd, sides: tr.sides, shouts: tr.shouts, finPos: tr.finPos, v: tr.spd[0].v,
+    spd: tr.spd, sides: tr.sides, shouts: tr.shouts, cp: tr.cp, cpT: -1, finPos: tr.finPos, v: tr.spd[0].v,
     fc: 0, ang: 0, run: 0, dist: 0, intro: OG.replay ? 0 : again ? 0.6 : OG_CARD, introT: 0, dead: -1, died: false, again,   // a replay from the menu skips the card and the 'Again.'
     flip: -1, flipA0: 0, flipA1: 0, flipDir: 1, buf: 0, land: 0, lastTurn: 1, bonkT: -1, bonkSide: 1, bonkW: 'y',
     fin: -1, sent: false, botI: 0, lean: 0, leanT: 0, shake: 0, stop: 0, fx: [], fall: [], ramp: -1, rampSeen: false, cue: false,
     deaths, lastM: OG.lastM || 0, bestM: OG.bestM || 0, clk: OG.clk || 0, failLine: LINES_OCTAGON.fails[deaths % LINES_OCTAGON.fails.length]});
+  if (again && OG.cpOn && tr.cp) {   // she crossed the checkpoint in this attempt: back on it (on its face, at its speed), not at the start
+    const cp = tr.cp, at = cp.row*OG_LEN;
+    let v = tr.spd[0].v; for (const s of tr.spd) if (cp.row >= s.row) v = s.v;
+    Object.assign(OG, {dist: at - OG_PZ, fc: ogM8(cp.p), ang: -ogM8(cp.p)*Math.PI/4, v, botI: Math.max(0, OG.moves.findIndex(m => m.a >= cp.row))});
+    for (const th of OG.throws) if (th.row < cp.row) { th.done = true; th.rel = true; }   // the books thrown before it are long gone
+    for (const b of OG.bonks) if (b.row < cp.row) b.hit = 99;
+  }
 }
 const ogMul = () => OG.bonkT >= 0 ? 0.35 + 0.65*clamp((OG.bonkT - 0.15)/0.85, 0, 1) : 1;   // a bonk drops him to a third of the speed for a moment
 const ogVe = () => OG.v*ogMul();
@@ -397,7 +426,7 @@ function ogWorld(t, S){
   ogStreaks(t, S.ang, g.cx, g.cy);
   const sh = ogShouAt(S);
   if (sh) {   // loose pages drifting past outside the tube, in the white, once he is throwing them
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0, nP = sh.behind ? 14 : 7; i < nP; i++) {   // twice as many once he is right behind
       const th = -Math.PI*(0.08 + 0.84*ogRnd(i + 3)) + (i % 2 ? 0 : Math.PI*0.95), z = ((ogRnd(i)*15 - S.pp*1.1) % 15 + 15) % 15 + 0.6;
       const r = S.R*1.25/z, x = g.cx + Math.cos(th + S.ang*0.3)*r, y = g.cy + Math.sin(th + S.ang*0.3)*r*0.8, al = clamp((15 - z)/5, 0, 1)*clamp((z - 0.6)/0.5, 0, 1);
       if (al > 0.02) ogPage(x, y, 70/z, t*2 + i, Math.cos(t*3 + i), al*0.85);
@@ -413,6 +442,16 @@ function ogWorld(t, S){
     if (z1 <= 0.66) continue;
     const zn = Math.max(z0, 0.62), fog = clamp((z1 - 2.5)/16, 0, 1);
     for (let k = 0; k < 8; k++) if (row.s[k]) ogPanel(g, k, zn, z1, fog, row.k[k], i*8 + k);
+  }
+  if (S.cp && S.rows[S.cp.row]) {   // the checkpoint: a chequered line across the path
+    const z0 = g.zOf(S.cp.row), z1 = z0 + OG_LEN*0.2, zm = (z0 + z1)/2, row = S.rows[S.cp.row];
+    if (z0 > 0.7 && z0 < 20) {
+      const fog = clamp((z1 - 2.5)/16, 0, 1), cols = [ogMix([74, 47, 12], OG_VOID, fog*0.9), ogMix([255, 210, 31], OG_VOID, fog)];
+      for (let k = 0; k < 8; k++) if (row.s[k]) for (let j = 0; j < 6; j++) for (let h = 0; h < 2; h++) {
+        const za = h ? zm : z0, zb = h ? z1 : zm;
+        ogQuad([g.P(k, j/6, za), g.P(k, (j + 1)/6, za), g.P(k, (j + 1)/6, zb), g.P(k, j/6, zb)]); ctx.fillStyle = cols[(j + h) % 2]; ctx.fill();
+      }
+    }
   }
   for (const th of S.throws || []) if (th.face !== null && th.done) {   // torn holes
     const z0 = g.zOf(th.row), z1 = g.zOf(th.row + th.len);
@@ -496,6 +535,7 @@ function ogStep(dt){
   if (OG.leanT > 0) OG.leanT -= dt;
   if (OG.land > 0) OG.land -= dt;
   if (OG.ramp >= 0) { OG.ramp += dt; if (OG.ramp > 0.9) OG.ramp = -1; }
+  if (OG.cpT >= 0) { OG.cpT += dt; if (OG.cpT > 1.5) OG.cpT = -1; }
   if (OG.bonkT >= 0) { OG.bonkT += dt; if (OG.bonkT > 1.4) OG.bonkT = -1; }
   for (const f of OG.fx) { f.age += dt; f.x += f.vx*dt; f.y += f.vy*dt; f.vy += f.gr*dt; f.r += f.vr*dt; }
   OG.fx = OG.fx.filter(f => f.age < f.life);
@@ -569,6 +609,7 @@ function ogStep(dt){
     OG.lastM = ogMetres(); OG.bestM = Math.max(OG.bestM, OG.lastM);
     return;
   }
+  if (!OG.cpOn && OG.cp && pp >= OG.cp.row*OG_LEN) { OG.cpOn = true; OG.cpT = 0; window.SFX && SFX.play('ding', {g: 0.7}); }   // CHECKPOINT!
   if (pp >= OG.finPos) { OG.fin = 0; window.SFX && SFX.play('clear'); window.SFX && SFX.play('whoosh', {p: 1.2, g: 0.8}); }   // through the finish ring
 }
 // ---------- the instruction card: what the keys do, in big words, until a key or a click (6 s at most) ----------
@@ -628,7 +669,7 @@ function ogPaint(t){
   const cx = W/2, cy = H*0.42, R0 = ogR0(), pp = ogPP(), playing = OG.intro <= 0 && OG.dead < 0 && OG.fin < 0, talk = !OG.replay;   // a replay from the menu: no card, no bubbles, no teaching keys, no shouts
   let R = R0;
   if (OG.fin > 0) { const u = clamp(OG.fin/0.6, 0, 1); R *= 1 + u*u*0.9; }   // finish: the camera surges through the ring under the white-out
-  const S = {rows: OG.rows, bonks: OG.bonks, throws: OG.throws, sides: OG.sides, shouts: OG.shouts, ang: OG.ang, pp, finPos: OG.finPos, R, fall: OG.fall, v: OG.v, fin: OG.fin, replay: OG.replay};
+  const S = {rows: OG.rows, bonks: OG.bonks, throws: OG.throws, sides: OG.sides, shouts: OG.shouts, ang: OG.ang, pp, finPos: OG.finPos, R, fall: OG.fall, v: OG.v, fin: OG.fin, replay: OG.replay, cp: OG.cp};
   const behindShake = (() => { const s = ogShouAt(S); return s && s.behind && playing ? 0.25 : 0; })();
   ctx.save(); ctx.translate(...fxShake(Math.max(OG.shake/0.25, behindShake), 12));   // a fall, a slam, or him right behind shakes the tunnel layer only, never the HUD
   const sh = ogWorld(t, S);
@@ -685,6 +726,12 @@ function ogPaint(t){
       title(m.flip ? LINES_OCTAGON.flip : LINES_OCTAGON.turn, x, y + 64, 30, '#fff');
     }
   }
+  if (OG.cpT >= 0) {   // CHECKPOINT! pops up under the timer and drifts away
+    const k = OG.cpT, pop = fxBack(clamp(k/0.2, 0, 1));
+    ctx.save(); ctx.globalAlpha = 1 - clamp((k - 1.1)/0.4, 0, 1); ctx.translate(cx, H*0.17 - k*12); ctx.scale(pop, pop);
+    title(LINES_OCTAGON.checkpoint, 0, 0, Math.min(46, W/16), C.y);
+    ctx.restore();
+  }
   if (OG.intro > 0) {
     if (OG.again) title(LINES_OCTAGON.again, cx, H*0.3, 64, C.y);
     else { ogCard(t); if (OG.introT > 0.5) bubble(LINES_OCTAGON.say, cx, fy - 78, 28); }
@@ -695,7 +742,7 @@ GAMES.octagon = {
   title: LINES_OCTAGON.title,
   hint: LINES_OCTAGON.hint,
   enter(api){   // one level: any ?level= plays it. api.replay (from the end menu) skips the card and every line of dialogue
-    this.api = api; OG.replay = !!(api && api.replay); OG.deaths = 0; OG.lastM = 0; OG.bestM = 0; OG.clk = 0; ogReset(false);
+    this.api = api; OG.replay = !!(api && api.replay); OG.cpOn = false; OG.deaths = 0; OG.lastM = 0; OG.bestM = 0; OG.clk = 0; ogReset(false);
   },
   draw(t, dt){ ogStep(dt); ogPaint(t); },
   cardUp(){ return OG.intro > 0 && !OG.again; },   // main.js: the subtitle waits for the card to go
