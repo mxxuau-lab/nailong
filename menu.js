@@ -8,7 +8,7 @@
 const MAX_SCORES = {   // Max, 13 Oct: "if you end with 0 it looks fake ... round them to be a bit random"
   octagon: 63.7,     // SECONDS (1:04.0), lower is better: a clean run with no bonks is about 61.6 s, so this is a good run with a few bonks and no falls. TODO Max sets this after playing
   tetris: 37.4,      // Max, 13 Oct: "give a really decent tetris score and ping pong score but they both have to be beatable with good precision" (the perfect bot does 13.7 s)
-  bottlesort: 53.8,  // a good human run (the perfect bot does 32 s); same standard as Max's tetris and ping pong
+  bottlesort: 85.9,  // Max's real time (13 Oct)
   battle: 68.3,      // a good human run (the perfect bot does about 50 s)
   pingpong: 87.6,    // Max won 11-0 (time not taken); the perfect bot's 11-0 takes about 79 s, so 1:30 needs a near-perfect match
   runner: 96.9,      // SECONDS (1:38.0), lower is better: a clean run is about 1:44 on the clock before bao zi (each takes 1 s off), so this is a clean run that ate about six. TODO Max sets this after playing
